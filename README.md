@@ -31,9 +31,12 @@ workspace directory, avatar and persona — and **rooms** to dispatch a message 
 - **Rooms** — a shared transcript with member bots and a dispatch policy:
   - `all` — every posted message is dispatched to every member bot;
   - `mention` — only bots named with `@<bot name>` receive it.
-  Each dispatch prompts the bot session with the room name, members and the recent transcript,
-  so bots answer with the room in context. The transcript keeps user messages and dispatch
-  receipts; bot replies live in their own sessions (reply relay is next).
+  Each dispatch prompts the bot session with the room name, members and the recent transcript.
+  **Bot replies are relayed back into the room transcript**, so the room is one thread.
+  - **Auto rounds** (`maxHops`, default 2): after a bot replies, its answer is dispatched to the
+    other members, so bots can talk to each other; `0` disables auto rounds.
+  - **Reply budget** (`budget`, default 8): at most that many bot replies per user message.
+  - A bot that answers `（沉默）` stays silent and does not trigger another round.
 - **All sessions** — sessions that are not registered as bots stay reachable in the same panel.
 - **JSON API** — the same data is reachable from local automation:
   - `GET /dsh-bots/api` → `{ version, bots, rooms, presets, dataRoot }`
@@ -77,8 +80,6 @@ files stay on disk. Deleting a room removes its transcript only.
 
 ## Roadmap
 
-- **v0.4** — reply relay: bot answers flow back into the room transcript, so bots can talk to
-  each other in one thread; hop and budget guardrails.
 - **v0.5** — per-bot memory files, memory-curator routine, scheduled routines.
 - **v0.6** — connectors (webhook / IM) and per-bot permissions.
 

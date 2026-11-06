@@ -1,7 +1,8 @@
 /**
  * Host half of the Bots bundle.
  *
- * Owns the bot registry and the room registry plus one same-origin JSON route:
+ * Owns the bot registry, the room registry, bot-to-room reply relay, and one
+ * same-origin JSON route:
  *
  *   GET  /dsh-bots/api  -> { bots, rooms, presets, dataRoot }
  *   POST /dsh-bots/api  -> { action, ... }
@@ -25,6 +26,10 @@ const PERSONA_LIMIT = 6000;
 const TEXT_LIMIT = 8000;
 const TRANSCRIPT_LIMIT = 400;
 const ROOM_CONTEXT_LIMIT = 12;
+const REPLY_LIMIT = 2000;
+const PENDING_TTL_MS = 10 * 60 * 1000;
+const DEFAULT_MAX_HOPS = 2;
+const DEFAULT_BUDGET = 8;
 
 function dataRoot() {
   const explicit = process.env.DSH_BOTS_DIR;
@@ -46,6 +51,30 @@ function slugify(value) {
     .replace(/[^a-z0-9\u4e00-\u9fa5]+/gu, '-')
     .replace(/^-+|-+$/g, '');
   return base.length === 0 ? 'bot' : base.slice(0, 40);
+}
+
+function clampInt(value, fallback, min, max) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  const rounded = Math.round(parsed);
+  if (rounded < min) return min;
+  if (rounded > max) return max;
+  return rounded;
+}
+
+function isSilence(value) {
+  const compact = value.replace(/[\s，,。.!！?？~～]/g, '');
+  if (compact.length === 0) return true;
+  return /^[(（]?沉默[)）]?$/.test(compact) || compact === '无' || compact.toLowerCase() === 'silent';
+}
+
+function assistantText(message) {
+  const blocks = Array.isArray(message?.content) ? message.content : [];
+  return blocks
+    .filter((block) => block !== null && typeof block === 'object' && block.type === 'text' && typeof block.text === 'string')
+    .map((block) => block.text)
+    .join('\n')
+    .trim();
 }
 
 function reply(res, status, payload) {
@@ -90,24 +119,36 @@ export function apply(ctx) {
   const registryPath = path.join(root, 'bots.json');
   const workspacesRoot = path.join(root, 'workspaces');
 
+  /** sessionId -> { roomId, hop, at } for prompts this plugin dispatched. */
+  const pending = new Map();
+  /** roomId -> { hop, used } for the current user message. */
+  const runtime = new Map();
+  let cachedState = { version: 3, bots: [], rooms: [] };
+
   async function loadState() {
     try {
       const raw = await readFile(registryPath, 'utf8');
       const parsed = JSON.parse(raw);
       if (parsed !== null && typeof parsed === 'object') {
         return {
-          version: 2,
+          version: 3,
           bots: Array.isArray(parsed.bots) ? parsed.bots : [],
-          rooms: Array.isArray(parsed.rooms) ? parsed.rooms : [],
+          rooms: Array.isArray(parsed.rooms) ? parsed.rooms.map((room) => ({
+            ...room,
+            maxHops: clampInt(room.maxHops, DEFAULT_MAX_HOPS, 0, 5),
+            budget: clampInt(room.budget, DEFAULT_BUDGET, 1, 30),
+            transcript: Array.isArray(room.transcript) ? room.transcript : [],
+          })) : [],
         };
       }
     } catch {
       /* first run */
     }
-    return { version: 2, bots: [], rooms: [] };
+    return { version: 3, bots: [], rooms: [] };
   }
 
   async function saveState(state) {
+    cachedState = state;
     await mkdir(root, { recursive: true });
     await writeFile(registryPath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
   }
@@ -128,25 +169,37 @@ export function apply(ctx) {
   }
 
   function roomView(room) {
+    const live = runtime.get(room.id);
     return {
       id: room.id,
       name: room.name,
       emoji: room.emoji,
       memberIds: room.memberIds,
       policy: room.policy,
+      maxHops: room.maxHops,
+      budget: room.budget,
       transcript: room.transcript,
       createdAt: room.createdAt,
       updatedAt: room.updatedAt,
+      live: live === undefined ? null : { hop: live.hop, used: live.used },
     };
   }
 
   function snapshot(state) {
+    prunePending();
     return {
-      version: 2,
+      version: 3,
       bots: state.bots.map(botView),
       rooms: state.rooms.map(roomView),
       dataRoot: root,
     };
+  }
+
+  function prunePending() {
+    const cutoff = Date.now() - PENDING_TTL_MS;
+    for (const [sessionId, entry] of pending) {
+      if (entry.at < cutoff) pending.delete(sessionId);
+    }
   }
 
   async function listPresets() {
@@ -265,6 +318,7 @@ export function apply(ctx) {
     }
     await saveState(state);
     if (typeof removed.sessionId === 'string' && removed.sessionId.length > 0) {
+      pending.delete(removed.sessionId);
       try {
         await ctx.workspaceRegistry.archiveSession(removed.sessionId);
       } catch (error) {
@@ -305,6 +359,8 @@ export function apply(ctx) {
       emoji: text(body.emoji, 8) || '💬',
       memberIds: normalizeMembers(body.memberIds, state),
       policy: normalizePolicy(body.policy),
+      maxHops: clampInt(body.maxHops, DEFAULT_MAX_HOPS, 0, 5),
+      budget: clampInt(body.budget, DEFAULT_BUDGET, 1, 30),
       transcript: [],
       createdAt: now,
       updatedAt: now,
@@ -321,6 +377,8 @@ export function apply(ctx) {
     if (typeof body.emoji === 'string') room.emoji = text(body.emoji, 8) || room.emoji;
     if (body.memberIds !== undefined) room.memberIds = normalizeMembers(body.memberIds, state);
     if (body.policy !== undefined) room.policy = normalizePolicy(body.policy);
+    if (body.maxHops !== undefined) room.maxHops = clampInt(body.maxHops, room.maxHops, 0, 5);
+    if (body.budget !== undefined) room.budget = clampInt(body.budget, room.budget, 1, 30);
     room.updatedAt = Date.now();
     await saveState(state);
     return room;
@@ -330,6 +388,7 @@ export function apply(ctx) {
     const index = state.rooms.findIndex((room) => room.id === body.id);
     if (index < 0) throw new Error(`room "${String(body.id)}" not found`);
     const [removed] = state.rooms.splice(index, 1);
+    runtime.delete(removed.id);
     await saveState(state);
     return removed;
   }
@@ -353,37 +412,37 @@ export function apply(ctx) {
     return members.filter((bot) => userText.includes(`@${bot.name}`) || userText.includes(`@${bot.id}`));
   }
 
-  async function roomPost(body, state) {
-    const room = state.rooms.find((candidate) => candidate.id === body.roomId);
-    if (room === undefined) throw new Error(`room "${String(body.roomId)}" not found`);
-    const userText = text(body.text, TEXT_LIMIT);
-    if (userText.length === 0) throw new Error('empty message');
+  function dispatchContent(room, context, speakerName, hop) {
+    const intro = speakerName === undefined
+      ? '请就房间里的话题给出你的回应。'
+      : `这是自动接续的第 ${hop} 轮：上一条发言来自「${speakerName}」，请直接回应它的内容（同意/补充/反驳都行）。`;
+    return [
+      `【群聊房间：${room.name}】`,
+      `成员：${context.members}`,
+      '',
+      '最近消息：',
+      context.tail,
+      '',
+      intro,
+      '只写你要对房间说的话；与你岗位无关或上一条已经说完时可以只回「（沉默）」。',
+      '不要复述规则，不要假扮其他成员。',
+    ].join('\n');
+  }
 
-    pushTranscript(room, { from: 'user', name: '我', text: userText });
-    const targets = targetsFor(room, state, userText);
+  async function dispatchRound(room, state, targets, speakerName, hop) {
     const context = roomContext(room, state);
     const failures = [];
-
     for (const bot of targets) {
-      const content = [
-        `【群聊房间：${room.name}】`,
-        `成员：${context.members}`,
-        '',
-        '最近消息：',
-        context.tail,
-        '',
-        '请就房间里的话题给出你的回应。只写你要对房间说的话；与你岗位无关时可以只回「（沉默）」。',
-        '不要复述规则，不要假扮其他成员。',
-      ].join('\n');
       try {
         await ctx.sessionController.prompt(
           {
             sessionId: bot.sessionId,
             requestId: randomUUID(),
-            content: [{ type: 'text', text: content }],
+            content: [{ type: 'text', text: dispatchContent(room, context, speakerName, hop) }],
           },
           new AbortController().signal,
         );
+        pending.set(String(bot.sessionId), { roomId: room.id, hop, at: Date.now() });
       } catch (error) {
         const detail = error && typeof error === 'object' && error.details && error.details.reason
           ? `: ${String(error.details.reason)}`
@@ -391,8 +450,19 @@ export function apply(ctx) {
         failures.push(`${bot.name}: ${error instanceof Error ? error.message : String(error)}${detail}`);
       }
     }
+    return failures;
+  }
 
-    const dispatched = targets.length - failures.length;
+  async function roomPost(body, state) {
+    const room = state.rooms.find((candidate) => candidate.id === body.roomId);
+    if (room === undefined) throw new Error(`room "${String(body.roomId)}" not found`);
+    const userText = text(body.text, TEXT_LIMIT);
+    if (userText.length === 0) throw new Error('empty message');
+
+    pushTranscript(room, { from: 'user', name: '我', text: userText });
+    runtime.set(room.id, { hop: 0, used: 0 });
+    const targets = targetsFor(room, state, userText);
+    const failures = await dispatchRound(room, state, targets, undefined, 0);
     if (targets.length > 0) {
       pushTranscript(room, {
         from: 'system',
@@ -401,8 +471,70 @@ export function apply(ctx) {
       });
     }
     await saveState(state);
-    return { room, dispatched, failures };
+    return { room, dispatched: targets.length - failures.length, failures };
   }
+
+  async function handleRelay(sessionId, replyText) {
+    const state = cachedState;
+    const entry = pending.get(sessionId);
+    if (entry === undefined) return;
+    pending.delete(sessionId);
+    const room = state.rooms.find((candidate) => candidate.id === entry.roomId);
+    if (room === undefined) return;
+    const bot = state.bots.find((candidate) => String(candidate.sessionId) === sessionId);
+    if (bot === undefined || !room.memberIds.includes(bot.id)) return;
+
+    const live = runtime.get(room.id) ?? { hop: entry.hop, used: 0 };
+    const budget = clampInt(room.budget, DEFAULT_BUDGET, 1, 30);
+    if (live.used >= budget) {
+      pushTranscript(room, { from: 'system', name: 'system', text: `本轮已达回复上限（${budget}），停止自动接续` });
+      await saveState(state);
+      return;
+    }
+    live.used += 1;
+    runtime.set(room.id, live);
+    pushTranscript(room, { from: bot.id, name: bot.name, text: replyText, hop: entry.hop });
+
+    const nextHop = entry.hop + 1;
+    const maxHops = clampInt(room.maxHops, DEFAULT_MAX_HOPS, 0, 5);
+    if (nextHop <= maxHops && live.used < budget) {
+      const others = state.bots.filter((candidate) => room.memberIds.includes(candidate.id) && candidate.id !== bot.id);
+      if (others.length > 0) {
+        live.hop = nextHop;
+        const failures = await dispatchRound(room, state, others, bot.name, nextHop);
+        if (failures.length > 0) {
+          pushTranscript(room, { from: 'system', name: 'system', text: `接续派发失败：${failures.join('；')}` });
+        }
+        await saveState(state);
+        return;
+      }
+    }
+    await saveState(state);
+  }
+
+  ctx.on('session/event', (session, event) => {
+    try {
+      const sessionId = String(session.id);
+      if (!pending.has(sessionId)) return;
+      if (event === null || typeof event !== 'object' || event.type !== 'assistant/message') return;
+      const replyText = assistantText(event.data?.message);
+      if (replyText.length === 0) return;
+      if (isSilence(replyText)) {
+        pending.delete(sessionId);
+        return;
+      }
+      void handleRelay(sessionId, replyText.slice(0, REPLY_LIMIT)).catch((error) => {
+        ctx.logger?.warn?.(`dsh-bots: room relay failed: ${String(error)}`);
+      });
+    } catch (error) {
+      ctx.logger?.warn?.(`dsh-bots: session event handler failed: ${String(error)}`);
+    }
+  });
+
+  const ready = loadState().then((state) => {
+    cachedState = state;
+    return state;
+  });
 
   const handler = async (req, res) => {
     try {
@@ -420,8 +552,9 @@ export function apply(ctx) {
         }
       }
 
+      const state = await ready;
+
       if (req.method === 'GET') {
-        const state = await loadState();
         reply(res, 200, { ...snapshot(state), presets: await listPresets() });
         return;
       }
@@ -434,7 +567,6 @@ export function apply(ctx) {
       }
 
       const body = await readJsonBody(req);
-      const state = await loadState();
       const action = typeof body.action === 'string' ? body.action : '';
       let extra = {};
       if (action === 'create') {

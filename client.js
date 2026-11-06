@@ -53,6 +53,12 @@ window.__ModuleLoader__.load({
       roomPolicy: 'Dispatch policy',
       roomPolicyAll: 'Everyone replies',
       roomPolicyMention: 'Only @mentioned bots',
+      roomMaxHops: 'Auto rounds',
+      roomMaxHopsHint: 'How many follow-up rounds bots may trigger on each other. 0 disables auto rounds.',
+      roomBudget: 'Reply budget',
+      roomBudgetHint: 'Max bot replies per user message.',
+      roundLabel: 'round',
+      waitingReplies: 'Dispatched — waiting for replies…',
       roomCreateAction: 'Create room',
       roomEmpty: 'No rooms yet',
       roomEmptyBody: 'Create a room, pick the bots that belong to it, and start a discussion.',
@@ -114,6 +120,12 @@ window.__ModuleLoader__.load({
       roomPolicy: '派发策略',
       roomPolicyAll: '全员回复',
       roomPolicyMention: '只回被 @ 的',
+      roomMaxHops: '自动接续轮数',
+      roomMaxHopsHint: 'Bot 之间可以互相接续几轮。0 表示不自动接续。',
+      roomBudget: '回复预算',
+      roomBudgetHint: '每条用户消息最多允许几条 Bot 回复。',
+      roundLabel: '轮',
+      waitingReplies: '已派发，等待回复…',
       roomCreateAction: '创建房间',
       roomEmpty: '还没有房间',
       roomEmptyBody: '建一个房间，选好成员 Bot，就可以开聊了。',
@@ -200,7 +212,9 @@ window.__ModuleLoader__.load({
 .dshb-composerRow{display:flex;gap:8px;align-items:flex-end;margin-top:12px;min-width:0}
 .dshb-composerRow .dshb-textarea{min-height:56px;flex:1}
 .dshb-roomMeta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px}
-@media (width <= 640px){.dshb-search{width:100%}.dshb-tools{width:100%}.dshb-tools .dshb-btn{flex:1}}
+.dshb-fieldGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;min-width:0}
+.dshb-waiting{margin-top:8px;font-size:12px;color:var(--dsw-alias-label-secondary)}
+@media (width <= 640px){.dshb-search{width:100%}.dshb-tools{width:100%}.dshb-tools .dshb-btn{flex:1}.dshb-fieldGrid{grid-template-columns:1fr}}
 `;
 
     const AVATAR_COLORS = ['#2f6fed', '#107c41', '#a4262c', '#8a5a00', '#5c2e91', '#0f6cbd', '#c239b3'];
@@ -427,6 +441,8 @@ window.__ModuleLoader__.load({
         emoji: editing ? room.emoji || '💬' : '💬',
         memberIds: editing ? [...(room.memberIds || [])] : [],
         policy: editing ? room.policy || 'all' : 'all',
+        maxHops: String(editing ? room.maxHops ?? 2 : 2),
+        budget: String(editing ? room.budget ?? 8 : 8),
       });
       const [error, setError] = React.useState('');
       const [busy, setBusy] = React.useState(false);
@@ -442,7 +458,14 @@ window.__ModuleLoader__.load({
         setBusy(true);
         setError('');
         try {
-          await onSubmit({ name: form.name.trim(), emoji: form.emoji.trim() || '💬', memberIds: form.memberIds, policy: form.policy });
+          await onSubmit({
+            name: form.name.trim(),
+            emoji: form.emoji.trim() || '💬',
+            memberIds: form.memberIds,
+            policy: form.policy,
+            maxHops: Number(form.maxHops),
+            budget: Number(form.budget),
+          });
         } catch (failure) {
           setError(String(failure && failure.message ? failure.message : failure));
           setBusy(false);
@@ -522,6 +545,36 @@ window.__ModuleLoader__.load({
               h('option', { value: 'mention' }, t('roomPolicyMention')),
             ),
           ),
+          h(
+            'div',
+            { className: 'dshb-fieldGrid' },
+            h(
+              Field,
+              { id: 'dshb-room-hops', label: t('roomMaxHops'), hint: t('roomMaxHopsHint') },
+              h('input', {
+                id: 'dshb-room-hops',
+                className: 'dshb-input',
+                type: 'number',
+                min: 0,
+                max: 5,
+                value: form.maxHops,
+                onChange: (event) => update('maxHops', event.target.value),
+              }),
+            ),
+            h(
+              Field,
+              { id: 'dshb-room-budget', label: t('roomBudget'), hint: t('roomBudgetHint') },
+              h('input', {
+                id: 'dshb-room-budget',
+                className: 'dshb-input',
+                type: 'number',
+                min: 1,
+                max: 30,
+                value: form.budget,
+                onChange: (event) => update('budget', event.target.value),
+              }),
+            ),
+          ),
           error.length > 0 ? h('div', { className: 'dshb-error' }, error) : null,
           h(
             'div',
@@ -534,12 +587,35 @@ window.__ModuleLoader__.load({
     }
 
     function RoomView(props) {
-      const { t, room, bots, onBack, onPost, onDelete } = props;
+      const { t, room, bots, onBack, onPost, onDelete, onRefresh } = props;
       const [draft, setDraft] = React.useState('');
       const [busy, setBusy] = React.useState(false);
+      const [waiting, setWaiting] = React.useState(false);
       const [error, setError] = React.useState('');
       const members = (bots || []).filter((bot) => room.memberIds.includes(bot.id));
       const names = new Map((bots || []).map((bot) => [bot.id, bot]));
+      const transcripts = room.transcript.length;
+
+      React.useEffect(() => {
+        if (typeof onRefresh !== 'function') return undefined;
+        const timer = window.setInterval(() => {
+          onRefresh().catch(() => {});
+        }, 3000);
+        return () => window.clearInterval(timer);
+      }, [onRefresh]);
+
+      React.useEffect(() => {
+        if (!waiting) return undefined;
+        const timer = window.setTimeout(() => setWaiting(false), 45000);
+        return () => window.clearTimeout(timer);
+      }, [waiting]);
+
+      React.useEffect(() => {
+        if (!waiting) return;
+        const last = room.transcript[room.transcript.length - 1];
+        if (last !== undefined && last.from !== 'user' && last.from !== 'system') setWaiting(false);
+      }, [transcripts, waiting, room.transcript]);
+
       const send = async () => {
         const value = draft.trim();
         if (value.length === 0 || busy) return;
@@ -548,6 +624,7 @@ window.__ModuleLoader__.load({
         try {
           await onPost(room.id, value);
           setDraft('');
+          setWaiting(true);
         } catch (failure) {
           setError(String(failure && failure.message ? failure.message : failure));
         } finally {
@@ -582,6 +659,11 @@ window.__ModuleLoader__.load({
               : members.map((bot) => h('span', { key: bot.id, className: 'dshb-badge' }, `${bot.emoji || '🤖'} ${bot.name}`)),
             h('span', { className: 'dshb-badge' }, `${members.length} ${t('memberCount')}`),
             h('span', { className: 'dshb-badge' }, room.policy === 'mention' ? t('policyMentionShort') : t('policyAllShort')),
+            h('span', { className: 'dshb-badge' }, `${t('roomMaxHops')} ${room.maxHops ?? 0}`),
+            h('span', { className: 'dshb-badge' }, `${t('roomBudget')} ${room.budget ?? 8}`),
+            room.live !== null && room.live !== undefined
+              ? h('span', { className: 'dshb-badge' }, `${t('roundLabel')} ${room.live.hop} · ${room.live.used}/${room.budget ?? 8}`)
+              : null,
           ),
           h(
             'div',
@@ -593,14 +675,16 @@ window.__ModuleLoader__.load({
                   const isSystem = entry.from === 'system';
                   const speaker = isUser ? t('fromUser') : isSystem ? t('fromSystem') : (names.get(entry.from) || {}).name || entry.from;
                   const emoji = isSystem ? '' : isUser ? '' : (names.get(entry.from) || {}).emoji || '🤖';
+                  const hopTag = typeof entry.hop === 'number' && entry.hop > 0 ? ` · ${t('roundLabel')} ${entry.hop}` : '';
                   return h(
                     'div',
                     { key: entry.id, className: `dshb-msg${isUser ? ' user' : isSystem ? ' system' : ''}` },
-                    h('span', { className: 'dshb-msgWho' }, `${emoji}${speaker}`),
+                    h('span', { className: 'dshb-msgWho' }, `${emoji}${speaker}${hopTag}`),
                     h('div', { className: 'dshb-bubble' }, entry.text),
                   );
                 }),
           ),
+          waiting ? h('div', { className: 'dshb-waiting' }, t('waitingReplies')) : null,
           error.length > 0 ? h('div', { className: 'dshb-error' }, error) : null,
           h(
             'div',
@@ -722,6 +806,11 @@ window.__ModuleLoader__.load({
         if (data.failures && data.failures.length > 0) setError(data.failures.join('; '));
       };
 
+      const refreshRooms = async () => {
+        const data = await request();
+        absorb(data);
+      };
+
       if (activeRoomId !== null) {
         const room = rooms.find((candidate) => candidate.id === activeRoomId);
         if (room === undefined) {
@@ -734,6 +823,7 @@ window.__ModuleLoader__.load({
             onBack: () => setActiveRoomId(null),
             onPost: postToRoom,
             onDelete: removeRoom,
+            onRefresh: refreshRooms,
           });
         }
       }
