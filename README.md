@@ -111,6 +111,8 @@ files stay on disk. Deleting a room removes its transcript only.
 
 ## Changelog
 
+- **0.8.5** — renaming a conversation uses an in-app dialog (Electron does not support `window.prompt`),
+  so the rename action works in the desktop app too.
 - **0.8.4** — rooms can hold multiple conversations (threads): a tab bar above the transcript to
   create / switch / rename / delete them, each with its own messages and reply budget. The transcript
   now opens scrolled to the latest message and follows new ones while you are at the bottom. Existing

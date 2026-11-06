@@ -599,6 +599,62 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
       );
     }
 
+    function ThreadDialog(props) {
+      const { t, title, onCancel, onSubmit } = props;
+      const [name, setName] = React.useState(title || '');
+      const [busy, setBusy] = React.useState(false);
+      const inputRef = React.useRef(null);
+      React.useEffect(() => {
+        if (inputRef.current !== null) {
+          inputRef.current.focus();
+          inputRef.current.select();
+        }
+      }, []);
+      const submit = async (event) => {
+        event.preventDefault();
+        const value = name.trim();
+        if (value.length === 0 || busy) return;
+        setBusy(true);
+        try {
+          await onSubmit(value);
+        } finally {
+          setBusy(false);
+        }
+      };
+      return h(
+        'div',
+        {
+          className: 'dshb-overlay',
+          onMouseDown: (event) => {
+            if (event.target === event.currentTarget) onCancel();
+          },
+        },
+        h(
+          'form',
+          { className: 'dshb-dialog', style: { colorScheme: darkTheme() ? 'dark' : 'light' }, onSubmit: submit },
+          h('h2', { className: 'dshb-dialogTitle' }, t('threadRename')),
+          h(
+            Field,
+            { id: 'dshb-thread-name', label: t('threadRenamePrompt') },
+            h('input', {
+              id: 'dshb-thread-name',
+              ref: inputRef,
+              className: 'dshb-input',
+              value: name,
+              maxLength: 60,
+              onChange: (event) => setName(event.target.value),
+            }),
+          ),
+          h(
+            'div',
+            { className: 'dshb-dialogActions' },
+            h('button', { type: 'button', className: 'dshb-btn quiet', onClick: onCancel }, t('formCancel')),
+            h('button', { type: 'submit', className: 'dshb-btn', disabled: busy || name.trim().length === 0 }, t('formSaveAction')),
+          ),
+        ),
+      );
+    }
+
     function BotDialog(props) {
       const { t, bot, presets, onCancel, onSubmit } = props;
       const editing = bot !== null && bot !== undefined;
@@ -1302,13 +1358,17 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
         }
       };
 
-      const renameThread = async () => {
+      const [threadDialogOpen, setThreadDialogOpen] = React.useState(false);
+      const renameThread = () => {
         if (typeof props.onThreadRename !== 'function') return;
-        const next = window.prompt(t('threadRenamePrompt'), thread.title || '');
-        if (next === null) return;
+        setThreadDialogOpen(true);
+      };
+
+      const submitThreadRename = async (title) => {
         setError('');
         try {
-          await props.onThreadRename(room.id, thread.id, next);
+          await props.onThreadRename(room.id, thread.id, title);
+          setThreadDialogOpen(false);
         } catch (failure) {
           setError(String(failure && failure.message ? failure.message : failure));
         }
@@ -1617,6 +1677,14 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
           ),
           h('div', { className: 'dshb-note' }, room.policy === 'leader' ? t('roomDispatchNoteLeader') : t('roomDispatchNote')),
         ),
+        threadDialogOpen
+          ? h(ThreadDialog, {
+              t,
+              title: thread.title || '',
+              onCancel: () => setThreadDialogOpen(false),
+              onSubmit: submitThreadRename,
+            })
+          : null,
       );
     }
 
