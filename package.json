@@ -6,6 +6,9 @@
   "type": "module",
   "description": "A Bots panel for DeepSeek Harness: chat-object zone with per-bot workspaces and personas.",
   "keywords": ["deepseek-harness", "dsh", "plugin", "bundle", "bots", "agents"],
+  "repository": { "type": "git", "url": "git+https://github.com/sreetiears/dsh-bots.git" },
+  "bugs": { "url": "https://github.com/sreetiears/dsh-bots/issues" },
+  "homepage": "https://github.com/sreetiears/dsh-bots#readme",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
