@@ -680,8 +680,11 @@ export function apply(ctx) {
 
   function targetsFor(room, state, userText) {
     const members = state.bots.filter((bot) => room.memberIds.includes(bot.id));
-    if (room.policy === 'all') return members;
-    return members.filter((bot) => userText.includes(`@${bot.name}`) || userText.includes(`@${bot.id}`));
+    if (room.policy === 'all') return { targets: members, broadcast: false };
+    const targeted = members.filter((bot) => userText.includes(`@${bot.name}`) || userText.includes(`@${bot.id}`));
+    if (targeted.length > 0) return { targets: targeted, broadcast: false };
+    // mention 房间没写 @ 时不能静默丢弃：退化为全员派发，避免"发了没反应"。
+    return { targets: members, broadcast: members.length > 0 };
   }
 
   function dispatchContent(room, context, bot, speakerName, hop) {
@@ -738,17 +741,19 @@ export function apply(ctx) {
 
     pushTranscript(room, { from: 'user', name: '我', text: userText });
     runtime.set(room.id, { hop: 0, used: 0 });
-    const targets = targetsFor(room, state, userText);
-    const failures = await dispatchRound(room, state, targets, undefined, 0);
-    if (targets.length > 0) {
+    const plan = targetsFor(room, state, userText);
+    const failures = await dispatchRound(room, state, plan.targets, undefined, 0);
+    if (plan.targets.length > 0) {
       pushTranscript(room, {
         from: 'system',
         name: 'system',
-        text: `已派发给 ${targets.map((bot) => bot.name).join('、')}${failures.length > 0 ? `（${failures.length} 个失败）` : ''}`,
+        text: `${plan.broadcast ? '未指定成员，已派发给全员：' : '已派发给 '}${plan.targets.map((bot) => bot.name).join('、')}${failures.length > 0 ? `（${failures.length} 个失败）` : ''}`,
       });
+    } else {
+      pushTranscript(room, { from: 'system', name: 'system', text: '房间还没有成员，先在编辑里加入 Bot' });
     }
     await saveState(state);
-    return { room, dispatched: targets.length - failures.length, failures };
+    return { room, dispatched: plan.targets.length - failures.length, failures };
   }
 
   /* ------------------------------------------------------------- reply relay */

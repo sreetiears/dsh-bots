@@ -109,6 +109,21 @@ files stay on disk. Deleting a room removes its transcript only.
 - **Theme-safe UI**: every surface and label uses the host's theme tokens (`--dsw-alias-*`), and
   the dialogs pin `color-scheme` to the live theme so native controls (selects, inputs) follow it.
 
+## Changelog
+
+- **0.8.2** — room composer sends on `Enter` (`Shift+Enter` adds a line, IME-safe); transcripts
+  render Markdown (headings, lists, tables, fenced code, quotes, links, inline styles); a message
+  without an `@name` in a `mention` room now broadcasts to every member instead of being dropped,
+  and an empty room says so in the transcript.
+- **0.8.1** — bot factory tools (`bots_list`, `bots_create`, `bots_memory_write`,
+  `bots_routine_add`, `bots_room_create`) and the `BotStudio` group built on them.
+- **0.8.0** — `bots_list` / `bots_create` registered for every agent.
+- **0.7.0** — UI polish pass; grouped bot cards, icon actions, skeletons, responsive rooms.
+- **0.6.x** — bot groups, `registerWorkspace` opt-out, daily routines, `workspacePrune`,
+  `@name` autocomplete in the room composer.
+- **0.5.0** — per-bot memory files and interval routines.
+- **0.4.0** — bot replies relayed back into room transcripts, with hop/budget limits.
+
 ## Roadmap
 
 - **v0.6** — per-bot permission scopes for the factory tools (only builder bots create bots).

@@ -93,8 +93,8 @@ window.__ModuleLoader__.load({
       roomEmpty: 'No rooms yet',
       roomEmptyBody: 'Create a room, pick the bots that belong to it, and start a discussion.',
       roomNoMembers: 'No bots in this room yet.',
-      roomComposer: 'Message the room…',
-      roomDispatchNote: 'Replies land in each bot session; the transcript keeps user messages and dispatch receipts.',
+      roomComposer: 'Message the room…  Enter sends, Shift+Enter adds a line',
+      roomDispatchNote: 'Enter sends, Shift+Enter adds a line. With no @name the message goes to every member; replies land in each bot session.',
       roomEmptyTranscript: 'No messages yet. Say something to dispatch it to the members.',
       roomLastEmpty: 'No messages',
       fromUser: 'Me',
@@ -190,8 +190,8 @@ window.__ModuleLoader__.load({
       roomEmpty: '还没有房间',
       roomEmptyBody: '建一个房间，选好成员 Bot，就可以开聊了。',
       roomNoMembers: '这个房间还没有成员。',
-      roomComposer: '对房间说点什么…',
-      roomDispatchNote: '回复会落在各自的 Bot 会话里；房间记录保存用户消息和派发回执。',
+      roomComposer: '对房间说点什么… 回车发送，Shift+回车换行',
+      roomDispatchNote: '回车发送，Shift+回车换行。不写 @名字 时默认派发给全员；回复会落在各自的 Bot 会话里。',
       roomEmptyTranscript: '还没有消息。发一条，会派发给成员。',
       roomLastEmpty: '还没有消息',
       fromUser: '我',
@@ -373,6 +373,26 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
 .dshb-skeleton{display:grid;grid-template-columns:repeat(auto-fill, minmax(min(270px, 100%), 1fr));gap:14px}
 .dshb-skeletonCard{height:96px;border-radius:14px;border:1px solid var(--dsw-alias-border-l1);background:linear-gradient(90deg, var(--dsw-alias-bg-layer-1) 25%, var(--dsw-alias-bg-layer-2) 37%, var(--dsw-alias-bg-layer-1) 63%);background-size:400% 100%;animation:dshb-shimmer 1.4s ease infinite}
 @keyframes dshb-shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
+.dshb-md{font-size:13px;line-height:1.66;white-space:normal;overflow-wrap:anywhere;min-width:0}
+.dshb-md>*:first-child{margin-top:0}
+.dshb-md>*:last-child{margin-bottom:0}
+.dshb-md p{margin:0 0 8px}
+.dshb-md h3,.dshb-md h4,.dshb-md h5,.dshb-md h6{margin:12px 0 6px;font-size:13.5px;line-height:1.4;font-weight:600}
+.dshb-md ul,.dshb-md ol{margin:0 0 8px;padding-left:22px}
+.dshb-md li{margin:2px 0}
+.dshb-md li>p{margin:0}
+.dshb-md code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);padding:1px 5px;border-radius:5px;border:1px solid var(--dsw-alias-border-l1)}
+.dshb-md pre{margin:0 0 10px;padding:10px 12px;border-radius:10px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);overflow-x:auto}
+.dshb-md pre code{background:transparent;border:none;padding:0;font-size:12px;line-height:1.55;white-space:pre}
+.dshb-md blockquote{margin:0 0 8px;padding:2px 0 2px 10px;border-left:3px solid var(--dsw-alias-border-l2);color:var(--dsw-alias-label-secondary)}
+.dshb-md blockquote p{margin:0 0 4px}
+.dshb-md a{color:var(--dsw-alias-brand-primary);text-decoration:underline;text-underline-offset:2px}
+.dshb-md hr{border:none;border-top:1px solid var(--dsw-alias-border-l1);margin:10px 0}
+.dshb-md table{border-collapse:collapse;margin:0 0 10px;font-size:12px;max-width:100%}
+.dshb-md th,.dshb-md td{border:1px solid var(--dsw-alias-border-l1);padding:4px 8px;text-align:left;vertical-align:top}
+.dshb-md th{background:var(--dsw-alias-bg-layer-1);font-weight:600}
+.dshb-msg.user .dshb-bubble .dshb-md code{background:rgba(255,255,255,.16);border-color:transparent;color:inherit}
+.dshb-msg.system .dshb-bubble .dshb-md{font-size:11px}
 .dshb-page ::-webkit-scrollbar{width:10px;height:10px}
 .dshb-page ::-webkit-scrollbar-thumb{border-radius:999px;background:var(--dsw-alias-border-l2);border:3px solid transparent;background-clip:content-box}
 .dshb-page ::-webkit-scrollbar-track{background:transparent}
@@ -1009,6 +1029,151 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
       );
     }
 
+    /* ------------------------------------------------------- markdown render */
+
+    function inlineNodes(text, keyBase) {
+      const nodes = [];
+      const pattern = /(`[^`]+`|\*\*[^*]+\*\*|~~[^~]+~~|\*[^*\n]+\*|\[[^\]]+\]\([^)]+\))/g;
+      let last = 0;
+      let match;
+      let index = 0;
+      while ((match = pattern.exec(text)) !== null) {
+        if (match.index > last) nodes.push(text.slice(last, match.index));
+        const token = match[0];
+        const key = `${keyBase}-${index}`;
+        index += 1;
+        if (token.startsWith('`')) nodes.push(h('code', { key }, token.slice(1, -1)));
+        else if (token.startsWith('**')) nodes.push(h('strong', { key }, token.slice(2, -2)));
+        else if (token.startsWith('~~')) nodes.push(h('del', { key }, token.slice(2, -2)));
+        else if (token.startsWith('[')) {
+          const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token);
+          nodes.push(h('a', { key, href: link[2], target: '_blank', rel: 'noreferrer noopener' }, link[1]));
+        } else nodes.push(h('em', { key }, token.slice(1, -1)));
+        last = match.index + token.length;
+      }
+      if (last < text.length) nodes.push(text.slice(last));
+      return nodes.length === 0 ? [text] : nodes;
+    }
+
+    function splitTableRow(line) {
+      return line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
+    }
+
+    function markdownBlocks(source) {
+      const lines = String(source).replace(/\r\n/g, '\n').split('\n');
+      const blocks = [];
+      let cursor = 0;
+      let key = 0;
+      const nextKey = () => `md${key++}`;
+      while (cursor < lines.length) {
+        const line = lines[cursor];
+        if (/^\s*$/.test(line)) {
+          cursor += 1;
+          continue;
+        }
+        const fence = /^\s*```(.*)$/.exec(line);
+        if (fence !== null) {
+          const lang = fence[1].trim();
+          const body = [];
+          cursor += 1;
+          while (cursor < lines.length && !/^\s*```\s*$/.test(lines[cursor])) {
+            body.push(lines[cursor]);
+            cursor += 1;
+          }
+          cursor += 1;
+          blocks.push(h('pre', { key: nextKey() }, h('code', { className: lang.length > 0 ? `language-${lang}` : undefined }, body.join('\n'))));
+          continue;
+        }
+        if (/^\s*(---+|\*\*\*+|___+)\s*$/.test(line)) {
+          blocks.push(h('hr', { key: nextKey() }));
+          cursor += 1;
+          continue;
+        }
+        const heading = /^(#{1,6})\s+(.*)$/.exec(line);
+        if (heading !== null) {
+          const level = Math.min(heading[1].length + 2, 6);
+          blocks.push(h(`h${level}`, { key: nextKey() }, inlineNodes(heading[2], nextKey())));
+          cursor += 1;
+          continue;
+        }
+        if (/^\s*>/.test(line)) {
+          const body = [];
+          while (cursor < lines.length && /^\s*>/.test(lines[cursor])) {
+            body.push(lines[cursor].replace(/^\s*>\s?/, ''));
+            cursor += 1;
+          }
+          blocks.push(h('blockquote', { key: nextKey() }, markdownBlocks(body.join('\n'))));
+          continue;
+        }
+        if (/^\s*([-*+]|\d+[.)])\s+/.test(line)) {
+          const ordered = /^\s*\d+[.)]\s+/.test(line);
+          const items = [];
+          while (
+            cursor < lines.length
+            && /^\s*([-*+]|\d+[.)])\s+/.test(lines[cursor])
+            && (ordered ? /^\s*\d+[.)]\s+/.test(lines[cursor]) : !/^\s*\d+[.)]\s+/.test(lines[cursor]))
+          ) {
+            items.push(lines[cursor].replace(/^\s*([-*+]|\d+[.)])\s+/, ''));
+            cursor += 1;
+          }
+          blocks.push(h(
+            ordered ? 'ol' : 'ul',
+            { key: nextKey() },
+            items.map((item, itemIndex) => h('li', { key: itemIndex }, inlineNodes(item, `li${key}-${itemIndex}`))),
+          ));
+          continue;
+        }
+        if (
+          /^\s*\|.*\|\s*$/.test(line)
+          && cursor + 1 < lines.length
+          && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[cursor + 1])
+          && lines[cursor + 1].includes('-')
+        ) {
+          const header = splitTableRow(line);
+          cursor += 2;
+          const rows = [];
+          while (cursor < lines.length && /^\s*\|.*\|\s*$/.test(lines[cursor])) {
+            rows.push(splitTableRow(lines[cursor]));
+            cursor += 1;
+          }
+          blocks.push(h(
+            'table',
+            { key: nextKey() },
+            h('thead', null, h('tr', null, header.map((cell, cellIndex) => h('th', { key: cellIndex }, inlineNodes(cell, `th${cellIndex}`))))),
+            h('tbody', null, rows.map((row, rowIndex) => h(
+              'tr',
+              { key: rowIndex },
+              row.map((cell, cellIndex) => h('td', { key: cellIndex }, inlineNodes(cell, `td${rowIndex}-${cellIndex}`))),
+            ))),
+          ));
+          continue;
+        }
+        const paragraph = [];
+        while (
+          cursor < lines.length
+          && !/^\s*$/.test(lines[cursor])
+          && !/^\s*```/.test(lines[cursor])
+          && !/^\s*>/.test(lines[cursor])
+          && !/^\s*([-*+]|\d+[.)])\s+/.test(lines[cursor])
+          && !/^#{1,6}\s+/.test(lines[cursor])
+        ) {
+          paragraph.push(lines[cursor]);
+          cursor += 1;
+        }
+        if (paragraph.length === 0) {
+          paragraph.push(line);
+          cursor += 1;
+        }
+        blocks.push(h('p', { key: nextKey() }, inlineNodes(paragraph.join(' '), nextKey())));
+      }
+      return blocks;
+    }
+
+    function MarkdownText(props) {
+      const text = String(props.text === undefined || props.text === null ? '' : props.text);
+      return h('div', { className: 'dshb-md' }, markdownBlocks(text));
+    }
+
     function RoomView(props) {
       const { t, room, bots, onBack, onPost, onDelete, onRefresh } = props;
       const [draft, setDraft] = React.useState('');
@@ -1158,7 +1323,7 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
                       h('span', { className: 'dshb-msgWho' }, `${speaker}${hopTag}`),
                       h('span', { className: 'dshb-msgTime' }, timeLabel(entry.at)),
                     ),
-                    h('div', { className: 'dshb-bubble' }, entry.text),
+                    h('div', { className: 'dshb-bubble' }, isSystem ? entry.text : h(MarkdownText, { text: entry.text })),
                   );
                 }),
           ),
@@ -1231,7 +1396,11 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
                       return;
                     }
                   }
-                  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) send();
+                  const composing = event.isComposing || (event.nativeEvent !== undefined && event.nativeEvent !== null && event.nativeEvent.isComposing === true);
+                  if (event.key === 'Enter' && !event.shiftKey && !composing) {
+                    event.preventDefault();
+                    send();
+                  }
                 },
                 onBlur: () => window.setTimeout(() => setMention(null), 120),
               }),
