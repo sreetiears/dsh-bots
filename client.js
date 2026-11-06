@@ -372,6 +372,17 @@ window.__ModuleLoader__.load({
 .dshb-roomHead{flex-wrap:wrap;gap:10px;margin-bottom:4px;align-items:center}
 .dshb-roomTitle{font-size:22px;font-weight:600;letter-spacing:-.01em}
 .dshb-roomMeta{gap:6px;margin-top:6px}
+.dshb-chip.member{background:var(--dsw-alias-bg-base)}
+.dshb-roomSettings{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px;font-size:11px;color:var(--dsw-alias-label-secondary);line-height:1.4}
+.dshb-roomSettings span{white-space:nowrap}
+.dshb-chip.live{gap:6px}
+.dshb-composerHint{margin-top:8px;padding-top:0;border-top:none;font-size:11px;line-height:1.5;opacity:.85}
+.dshb-threadTab.active::after{content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:2px;border-radius:2px;background:var(--dsw-alias-brand-primary, #2f6fed)}
+.dshb-threadTab{position:relative}
+.dshb-threadBar{box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.dshb-transcript{scroll-behavior:smooth}
+.dshb-sendBtn:not(:disabled):hover{filter:brightness(1.08)}
+.dshb-composer:focus-within .dshb-sendBtn:not(:disabled){box-shadow:0 0 0 2px var(--dsw-alias-bg-layer-1), 0 0 0 4px var(--dsw-alias-brand-primary, #2f6fed)}
 .dshb-threadBar{display:flex;align-items:center;gap:8px;margin-top:16px;padding:5px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-layer-1);min-width:0}
 .dshb-threads{display:flex;align-items:center;gap:4px;flex:1 1 auto;min-width:0;overflow-x:auto;scrollbar-width:thin}
 .dshb-threads::-webkit-scrollbar{height:6px}
@@ -1500,18 +1511,23 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
             { className: 'dshb-roomMeta' },
             members.length === 0
               ? h('span', { className: 'dshb-chip' }, t('roomNoMembers'))
-              : members.map((bot) => h('span', { key: bot.id, className: 'dshb-chip' }, `${bot.emoji || '🤖'} ${bot.name}`)),
-            h('span', { className: 'dshb-chip' }, `${members.length} ${t('memberCount')}`),
-            h('span', { className: 'dshb-chip' }, `${threads.length} ${t('threadCount')}`),
-            h('span', { className: 'dshb-chip' }, policyShort(t, room.policy)),
-            room.leaderId !== undefined && room.leaderId !== ''
-              ? h('span', { className: 'dshb-chip' }, `👑 ${(bots || []).find((bot) => bot.id === room.leaderId)?.name || room.leaderId}`)
-              : null,
-            h('span', { className: 'dshb-chip' }, `${t('roomMaxHops')} ${room.maxHops ?? 0}`),
-            h('span', { className: 'dshb-chip' }, `${t('roomBudget')} ${room.budget ?? 8}`),
+              : members.map((bot) => h('span', { key: bot.id, className: 'dshb-chip member' }, `${bot.emoji || '🤖'} ${bot.name}`)),
             room.live !== null && room.live !== undefined
-              ? h('span', { className: 'dshb-chip live' }, `${t('roundLabel')} ${room.live.hop} · ${room.live.used}/${room.budget ?? 8}`)
+              ? h('span', { className: 'dshb-chip live' }, [
+                  h('span', { key: 'dot', className: 'dshb-waitingDot' }),
+                  `${t('roundLabel')} ${room.live.hop} · ${room.live.used}/${room.budget ?? 8}`,
+                ])
               : null,
+          ),
+          h(
+            'div',
+            { className: 'dshb-roomSettings' },
+            h('span', null, `${policyShort(t, room.policy)}`),
+            room.leaderId !== undefined && room.leaderId !== ''
+              ? h('span', null, `👑 ${(bots || []).find((bot) => bot.id === room.leaderId)?.name || room.leaderId}`)
+              : null,
+            h('span', null, `${t('roomMaxHops')} ${room.maxHops ?? 0}`),
+            h('span', null, `${t('roomBudget')} ${room.budget ?? 8}`),
           ),
           h(
             'div',
@@ -1675,7 +1691,7 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
               ),
             ),
           ),
-          h('div', { className: 'dshb-note' }, room.policy === 'leader' ? t('roomDispatchNoteLeader') : t('roomDispatchNote')),
+          h('div', { className: 'dshb-note dshb-composerHint' }, room.policy === 'leader' ? t('roomDispatchNoteLeader') : t('roomDispatchNote')),
         ),
         threadDialogOpen
           ? h(ThreadDialog, {

@@ -111,6 +111,9 @@ files stay on disk. Deleting a room removes its transcript only.
 
 ## Changelog
 
+- **0.8.6** — room header simplified: members on one row, live round status as a pill, and the
+  hops/budget/policy/leader settings moved to a quieter line below. Active conversation tab gets an
+  underline; the composer hint sits under the input; the send button shows a focus ring.
 - **0.8.5** — renaming a conversation uses an in-app dialog (Electron does not support `window.prompt`),
   so the rename action works in the desktop app too.
 - **0.8.4** — rooms can hold multiple conversations (threads): a tab bar above the transcript to
