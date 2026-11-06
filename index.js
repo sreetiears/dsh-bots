@@ -22,7 +22,7 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 
-export const inject = ['webServer', 'sessionController', 'agentPresets', 'workspaceRegistry'];
+export const inject = ['webServer', 'sessionController', 'agentPresets', 'workspaceRegistry', 'tools'];
 
 const ROUTE_PATH = '/dsh-bots/api';
 const NAME_LIMIT = 80;
@@ -838,6 +838,179 @@ export function apply(ctx) {
       .catch((error) => ctx.logger?.warn?.(`dsh-bots: routine tick failed: ${String(error)}`));
   }, TIMER_TICK_MS);
   ctx.effect(() => () => clearInterval(timer), 'dsh-bots: routine timer');
+
+  /**
+   * Build a ToolDefinition without importing @deepseek-ai/dsh-tools: the plugin
+   * lives outside the profile's node_modules, so the registry contract is
+   * implemented directly (ToolSchema + output declaration + execute).
+   */
+  function factoryTool(spec) {
+    if (typeof spec.name !== 'string' || spec.name.trim().length === 0) {
+      throw new TypeError('dsh-bots factoryTool: spec.name must be a non-empty string');
+    }
+    const properties = {};
+    const required = [];
+    for (const [key, entry] of Object.entries(spec.properties)) {
+      const { required: isRequired, ...property } = entry;
+      properties[key] = property;
+      if (isRequired === true) required.push(key);
+    }
+    return {
+      name: spec.name,
+      description: spec.description,
+      parameters: { type: 'object', additionalProperties: false, properties, required },
+      output: {
+        schema: { type: 'string' },
+        render: (_args, value) => [{ type: 'text', text: String(value) }],
+      },
+      execute: spec.execute,
+    };
+  }
+
+  function resolveMemberIds(value, state) {
+    const tokens = String(value || '')
+      .split(/[,，、\s]+/u)
+      .map((token) => token.trim())
+      .filter((token) => token.length > 0);
+    const ids = [];
+    for (const token of tokens) {
+      const exact = state.bots.find((bot) => bot.id === token || bot.name === token);
+      const fuzzy = exact || state.bots.find((bot) => bot.name.includes(token) || token.includes(bot.name));
+      if (fuzzy !== undefined && !ids.includes(fuzzy.id)) ids.push(fuzzy.id);
+    }
+    return ids;
+  }
+
+  const botFactoryTools = [
+    ctx.tools.register(factoryTool({
+      name: 'bots_list',
+      description: '列出当前所有 Bot（id、名字、分组、岗位摘要、记忆与例行数量）和房间。创建任何 Bot 之前先调用它查重。',
+      properties: {},
+      execute: async () => {
+        const state = await ready;
+        if (state.bots.length === 0) return '当前没有任何 Bot。';
+        const groups = new Map();
+        for (const bot of state.bots) {
+          const group = bot.group || '未分组';
+          if (!groups.has(group)) groups.set(group, []);
+          groups.get(group).push(bot);
+        }
+        const lines = [`共 ${state.bots.length} 个 Bot、${state.rooms.length} 个房间：`];
+        for (const [group, bots] of groups) {
+          lines.push('', `【${group}】`);
+          for (const bot of bots) {
+            const persona = String(bot.persona || '').replace(/\s+/gu, ' ').slice(0, 90);
+            lines.push(`- ${bot.emoji} ${bot.name}｜id=${bot.id}｜preset=${bot.presetId || '默认'}｜记忆=${bot.memory ? '有' : '无'}｜例行=${(bot.routines || []).length} 条${persona.length > 0 ? `｜${persona}` : ''}`);
+          }
+        }
+        if (state.rooms.length > 0) {
+          lines.push('', '房间：');
+          for (const room of state.rooms) {
+            const members = room.memberIds.map((memberId) => state.bots.find((bot) => bot.id === memberId)?.name || memberId).join('、');
+            lines.push(`- ${room.emoji} ${room.name}｜id=${room.id}｜policy=${room.policy}｜成员=${members}`);
+          }
+        }
+        return lines.join('\n');
+      },
+    })),
+    ctx.tools.register(factoryTool({
+      name: 'bots_create',
+      description: '创建一个长期存在的 Bot：独立会话、独立工作目录、独立长期记忆。persona 是岗位说明书，必须写清职责、工作方式、输出格式和边界。创建前先用 bots_list 查重，避免与已有 Bot 重复。记忆与例行任务是创建后的第二步：分别用 bots_memory_write 和 bots_routine_add 设置。',
+      properties: {
+        name: { type: 'string', required: true, description: '短中文名，如「需求访谈员」' },
+        emoji: { type: 'string', description: '单个 emoji，默认 🤖' },
+        group: { type: 'string', description: '面板分组名，如「BotStudio」。同组 Bot 在面板里并排显示' },
+        persona: { type: 'string', required: true, description: '岗位说明书全文（建议 200-1500 字）' },
+        presetId: { type: 'string', description: 'agent preset id，留空用默认 preset' },
+        registerWorkspace: { type: 'boolean', description: '是否同时注册为工作区，默认 false' },
+      },
+      execute: async (args) => {
+        const state = await ready;
+        const persona = text(args.persona, PERSONA_LIMIT);
+        if (persona.length < 20) throw new Error('persona 太短：请写清职责、工作方式、输出格式与边界（至少 20 字）');
+        const bot = await createBot({
+          name: args.name,
+          emoji: args.emoji,
+          group: args.group,
+          persona,
+          presetId: args.presetId,
+          registerWorkspace: args.registerWorkspace === true,
+        }, state);
+        return [
+          `已创建 Bot：${bot.emoji} ${bot.name}（id=${bot.id}）`,
+          `分组：${bot.group || '未分组'}｜会话：${bot.sessionId}`,
+          `工作目录：${bot.cwd}`,
+          '下一步：把它加入房间（bots_room_create），或让用户直接在侧栏 Bots 面板里点开它。',
+        ].join('\n');
+      },
+    })),
+    ctx.tools.register(factoryTool({
+      name: 'bots_memory_write',
+      description: '写入（覆盖）某个 Bot 的长期记忆文件。记忆会在它参与房间对话、执行例行任务时注入。适合在建好 Bot 后写入初始记忆，或追加整理后的要点（先读旧内容再写全量）。',
+      properties: {
+        botId: { type: 'string', required: true, description: 'Bot id（bots_list 返回的 id）' },
+        memory: { type: 'string', required: true, description: '完整记忆内容（Markdown），会覆盖旧内容' },
+      },
+      execute: async (args) => {
+        const state = await ready;
+        const bot = await updateMemory({ botId: args.botId, memory: args.memory }, state);
+        return `已更新 ${bot.emoji} ${bot.name}（id=${bot.id}）的长期记忆：${String(bot.memory || '').length} 字符。`;
+      },
+    })),
+    ctx.tools.register(factoryTool({
+      name: 'bots_routine_add',
+      description: '给某个 Bot 增加一条例行任务：到点自动向它的会话投递指令。mode=daily 时用 at（HH:MM，本地时间）；mode=interval 时用 minutes（间隔分钟数）。',
+      properties: {
+        botId: { type: 'string', required: true, description: 'Bot id' },
+        name: { type: 'string', required: true, description: '例行任务名，如「每日学习计划推送」' },
+        prompt: { type: 'string', required: true, description: '到点投递的指令（写给这个 Bot 的完整任务说明）' },
+        mode: { type: 'string', description: 'daily 或 interval，默认 interval' },
+        at: { type: 'string', description: 'daily 模式的时间，HH:MM，默认 06:00' },
+        minutes: { type: 'number', description: 'interval 模式的间隔分钟数，默认 60' },
+      },
+      execute: async (args) => {
+        const state = await ready;
+        const bot = await routineAdd(args, state);
+        const routine = (bot.routines || [])[bot.routines.length - 1];
+        return `已给 ${bot.emoji} ${bot.name} 增加例行任务「${routine.name}」（id=${routine.id}）：${routine.mode === 'daily' ? `每天 ${routine.at}` : `每 ${routine.minutes} 分钟`}。当前该 Bot 共 ${(bot.routines || []).length} 条例行。`;
+      },
+    })),
+    ctx.tools.register(factoryTool({
+      name: 'bots_room_create',
+      description: '创建一个群聊房间，把若干 Bot 拉进来互相协作。members 用 Bot 名字/id 列表（逗号分隔）。policy=mention 时只有被 @ 的 Bot 回复；policy=all 时全员回复（更费 token）。',
+      properties: {
+        name: { type: 'string', required: true, description: '房间名' },
+        emoji: { type: 'string', description: '单个 emoji，默认 💬' },
+        members: { type: 'string', required: true, description: '成员名字或 id，逗号分隔' },
+        policy: { type: 'string', description: 'all 或 mention，默认 mention' },
+        maxHops: { type: 'number', description: '自动接续轮数上限，默认 2，0 关闭' },
+        budget: { type: 'number', description: '每条用户消息的 Bot 回复预算，默认 6' },
+      },
+      execute: async (args) => {
+        const state = await ready;
+        const memberIds = resolveMemberIds(args.members, state);
+        if (memberIds.length === 0) throw new Error(`没有匹配到任何 Bot：${String(args.members)}`);
+        const room = await createRoom({
+          name: args.name,
+          emoji: args.emoji,
+          memberIds,
+          policy: args.policy,
+          maxHops: args.maxHops,
+          budget: args.budget,
+        }, state);
+        const names = memberIds.map((memberId) => state.bots.find((bot) => bot.id === memberId)?.name || memberId).join('、');
+        return [
+          `已创建房间：${room.emoji} ${room.name}（id=${room.id}）`,
+          `成员：${names}`,
+          `策略：${room.policy}｜自动接续 ${room.maxHops} 轮｜预算 ${room.budget} 条`,
+          '下一步：用户在侧栏 Bots 面板打开这个房间就能开始对话。',
+        ].join('\n');
+      },
+    })),
+  ];
+  ctx.effect(() => () => {
+    for (const dispose of botFactoryTools) dispose();
+  }, 'dsh-bots: bot factory tools');
 
   const handler = async (req, res) => {
     try {
