@@ -271,6 +271,12 @@ window.__ModuleLoader__.load({
 .dshb-msg.system .dshb-bubble{background:transparent;color:var(--dsw-alias-label-secondary);font-size:12px;padding:2px 8px}
 .dshb-composerRow{display:flex;gap:8px;align-items:flex-end;margin-top:12px;min-width:0}
 .dshb-composerRow .dshb-textarea{min-height:56px;flex:1}
+.dshb-composerWrap{position:relative;flex:1;min-width:0;display:flex}
+.dshb-composerWrap .dshb-textarea{flex:1;width:100%}
+.dshb-mention{position:absolute;left:0;right:0;bottom:calc(100% + 6px);z-index:6;background:var(--dsw-alias-bg-layer-1, #fff);border:1px solid var(--dsw-alias-border-l2, #d9d9dd);border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.24);padding:4px;max-height:200px;overflow:auto}
+.dshb-mentionItem{display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:none;background:transparent;color:var(--dsw-alias-label-primary, #0f1115);font:inherit;font-size:13px;padding:6px 8px;border-radius:6px;cursor:pointer}
+.dshb-mentionItem.active,.dshb-mentionItem:hover{background:var(--dsw-alias-bg-layer-2, #f2f3f5)}
+.dshb-mentionName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshb-roomMeta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px}
 .dshb-fieldGrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;min-width:0}
 .dshb-waiting{margin-top:8px;font-size:12px;color:var(--dsw-alias-label-secondary)}
@@ -891,6 +897,55 @@ window.__ModuleLoader__.load({
         if (last !== undefined && last.from !== 'user' && last.from !== 'system') setWaiting(false);
       }, [transcripts, waiting, room.transcript]);
 
+      const textareaRef = React.useRef(null);
+      const [mention, setMention] = React.useState(null);
+
+      const recomputeMention = (value, caret) => {
+        const before = value.slice(0, caret);
+        const at = before.lastIndexOf('@');
+        if (at < 0) {
+          setMention(null);
+          return;
+        }
+        const token = before.slice(at + 1);
+        if (/[\s\n]/.test(token)) {
+          setMention(null);
+          return;
+        }
+        if (at > 0 && !/[\s\n，,。.!！?？]/.test(before[at - 1])) {
+          setMention(null);
+          return;
+        }
+        const query = token.toLowerCase();
+        const candidates = members.filter((bot) => String(bot.name || '').toLowerCase().includes(query));
+        if (candidates.length === 0) {
+          setMention(null);
+          return;
+        }
+        setMention({ start: at, end: caret, query, index: 0 });
+      };
+
+      const mentionCandidates = mention === null
+        ? []
+        : members.filter((bot) => String(bot.name || '').toLowerCase().includes(mention.query)).slice(0, 8);
+
+      const insertMention = (bot) => {
+        if (mention === null || bot === undefined) return;
+        const name = String(bot.name || '');
+        const next = `${draft.slice(0, mention.start)}@${name} ${draft.slice(mention.end)}`;
+        const caret = mention.start + name.length + 2;
+        setDraft(next);
+        setMention(null);
+        window.requestAnimationFrame(() => {
+          const element = textareaRef.current;
+          if (element !== null) {
+            element.focus();
+            element.setSelectionRange(caret, caret);
+          }
+        });
+      };
+
+
       const send = async () => {
         const value = draft.trim();
         if (value.length === 0 || busy) return;
@@ -964,15 +1019,70 @@ window.__ModuleLoader__.load({
           h(
             'div',
             { className: 'dshb-composerRow' },
-            h('textarea', {
-              className: 'dshb-textarea',
-              value: draft,
-              placeholder: t('roomComposer'),
-              onChange: (event) => setDraft(event.target.value),
-              onKeyDown: (event) => {
-                if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) send();
-              },
-            }),
+            h(
+              'div',
+              { className: 'dshb-composerWrap' },
+              mention !== null && mentionCandidates.length > 0
+                ? h(
+                    'div',
+                    { className: 'dshb-mention' },
+                    mentionCandidates.map((bot, index) =>
+                      h(
+                        'button',
+                        {
+                          key: bot.id,
+                          type: 'button',
+                          className: `dshb-mentionItem${index === mention.index ? ' active' : ''}`,
+                          onMouseDown: (event) => {
+                            event.preventDefault();
+                            insertMention(bot);
+                          },
+                        },
+                        h('span', { 'aria-hidden': true }, bot.emoji || '🤖'),
+                        h('span', { className: 'dshb-mentionName' }, bot.name),
+                      ),
+                    ),
+                  )
+                : null,
+              h('textarea', {
+                ref: textareaRef,
+                className: 'dshb-textarea',
+                value: draft,
+                placeholder: t('roomComposer'),
+                onChange: (event) => {
+                  const value = event.target.value;
+                  setDraft(value);
+                  recomputeMention(value, event.target.selectionStart);
+                },
+                onSelect: (event) => recomputeMention(event.currentTarget.value, event.currentTarget.selectionStart),
+                onKeyDown: (event) => {
+                  if (mention !== null && mentionCandidates.length > 0) {
+                    if (event.key === 'ArrowDown') {
+                      event.preventDefault();
+                      setMention({ ...mention, index: (mention.index + 1) % mentionCandidates.length });
+                      return;
+                    }
+                    if (event.key === 'ArrowUp') {
+                      event.preventDefault();
+                      setMention({ ...mention, index: (mention.index - 1 + mentionCandidates.length) % mentionCandidates.length });
+                      return;
+                    }
+                    if (event.key === 'Enter' || event.key === 'Tab') {
+                      event.preventDefault();
+                      insertMention(mentionCandidates[mention.index]);
+                      return;
+                    }
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
+                      setMention(null);
+                      return;
+                    }
+                  }
+                  if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) send();
+                },
+                onBlur: () => window.setTimeout(() => setMention(null), 120),
+              }),
+            ),
             h('button', { type: 'button', className: 'dshb-btn', disabled: busy || draft.trim().length === 0, onClick: send }, t('actionSend')),
           ),
           h('div', { className: 'dshb-note' }, t('roomDispatchNote')),

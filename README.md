@@ -38,6 +38,9 @@ workspace directory, avatar and persona — and **rooms** to dispatch a message 
   - **Auto rounds** (`maxHops`, default 2): after a bot replies, its answer is dispatched to the
     other members, so bots can talk to each other; `0` disables auto rounds.
   - **Reply budget** (`budget`, default 8): at most that many bot replies per user message.
+  - **@mention autocomplete** in the room composer: type `@` and the member bots appear as a
+    filtered dropdown (↑/↓ to move, Enter/Tab to insert, Esc to dismiss), so `mention`-policy
+    rooms are quick to address.
   - A bot that answers `（沉默）` stays silent and does not trigger another round.
 - **Memory per bot** — each bot has a long-term memory file (`<data root>/memory/<botId>.md`):
   - editable from the bot card ("Memory");
