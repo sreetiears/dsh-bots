@@ -83,6 +83,10 @@ window.__ModuleLoader__.load({
       roomPolicy: 'Dispatch policy',
       roomPolicyAll: 'Everyone replies',
       roomPolicyMention: 'Only @mentioned bots',
+      roomPolicyLeader: 'Leader decides who sees it',
+      roomLeader: 'Leader bot',
+      roomLeaderHint: 'Only the leader talks to you; it decides which members should see each message.',
+      roomLeaderNone: 'Pick a leader from the members below.',
       roomMaxHops: 'Auto rounds',
       roomMaxHopsHint: 'How many follow-up rounds bots may trigger on each other. 0 disables auto rounds.',
       roomBudget: 'Reply budget',
@@ -95,6 +99,7 @@ window.__ModuleLoader__.load({
       roomNoMembers: 'No bots in this room yet.',
       roomComposer: 'Message the room…  Enter sends, Shift+Enter adds a line',
       roomDispatchNote: 'Enter sends, Shift+Enter adds a line. With no @name the message goes to every member; replies land in each bot session.',
+      roomDispatchNoteLeader: 'Enter sends, Shift+Enter adds a line. Only the leader answers you; it decides which members should see each message.',
       roomEmptyTranscript: 'No messages yet. Say something to dispatch it to the members.',
       roomLastEmpty: 'No messages',
       fromUser: 'Me',
@@ -102,6 +107,7 @@ window.__ModuleLoader__.load({
       memberCount: 'members',
       policyAllShort: 'all',
       policyMentionShort: 'mention',
+      policyLeaderShort: 'leader',
       empty: 'Nothing here',
     };
     const ZH = {
@@ -180,6 +186,10 @@ window.__ModuleLoader__.load({
       roomPolicy: '派发策略',
       roomPolicyAll: '全员回复',
       roomPolicyMention: '只回被 @ 的',
+      roomPolicyLeader: 'Leader 决定给谁看',
+      roomLeader: 'Leader Bot',
+      roomLeaderHint: '只有 Leader 跟你对话；它决定每条消息派给哪些成员，其他人不会抢答。',
+      roomLeaderNone: '先在下面的成员里选一个 Leader。',
       roomMaxHops: '自动接续轮数',
       roomMaxHopsHint: 'Bot 之间可以互相接续几轮。0 表示不自动接续。',
       roomBudget: '回复预算',
@@ -192,6 +202,7 @@ window.__ModuleLoader__.load({
       roomNoMembers: '这个房间还没有成员。',
       roomComposer: '对房间说点什么… 回车发送，Shift+回车换行',
       roomDispatchNote: '回车发送，Shift+回车换行。不写 @名字 时默认派发给全员；回复会落在各自的 Bot 会话里。',
+      roomDispatchNoteLeader: '回车发送，Shift+回车换行。只有 Leader 回你，由它决定这条消息给哪些成员看。',
       roomEmptyTranscript: '还没有消息。发一条，会派发给成员。',
       roomLastEmpty: '还没有消息',
       fromUser: '我',
@@ -199,6 +210,7 @@ window.__ModuleLoader__.load({
       memberCount: '位成员',
       policyAllShort: '全员',
       policyMentionShort: '@点名',
+      policyLeaderShort: 'Leader',
       empty: '空空如也',
     };
     const DICT = { en: EN, de: EN, es: EN, fr: EN, ja: EN, pt: EN, ru: EN, zh: ZH };
@@ -484,6 +496,12 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
       } catch {
         return false;
       }
+    }
+
+    function policyShort(t, policy) {
+      if (policy === 'leader') return t('policyLeaderShort');
+      if (policy === 'mention') return t('policyMentionShort');
+      return t('policyAllShort');
     }
 
     async function request(body) {
@@ -883,7 +901,8 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
         name: editing ? room.name : '',
         emoji: editing ? room.emoji || '💬' : '💬',
         memberIds: editing ? [...(room.memberIds || [])] : [],
-        policy: editing ? room.policy || 'all' : 'all',
+        policy: editing ? room.policy || 'leader' : 'leader',
+        leaderId: editing ? room.leaderId || '' : '',
         maxHops: String(editing ? room.maxHops ?? 2 : 2),
         budget: String(editing ? room.budget ?? 8 : 8),
       });
@@ -892,7 +911,11 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
       const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
       const toggleMember = (id) => {
         const next = form.memberIds.includes(id) ? form.memberIds.filter((item) => item !== id) : [...form.memberIds, id];
-        update('memberIds', next);
+        setForm((current) => ({
+          ...current,
+          memberIds: next,
+          leaderId: next.includes(current.leaderId) ? current.leaderId : '',
+        }));
       };
 
       const submit = async (event) => {
@@ -906,6 +929,7 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
             emoji: form.emoji.trim() || '💬',
             memberIds: form.memberIds,
             policy: form.policy,
+            leaderId: form.leaderId,
             maxHops: Number(form.maxHops),
             budget: Number(form.budget),
           });
@@ -984,10 +1008,32 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
                 value: form.policy,
                 onChange: (event) => update('policy', event.target.value),
               },
+              h('option', { value: 'leader' }, t('roomPolicyLeader')),
               h('option', { value: 'all' }, t('roomPolicyAll')),
               h('option', { value: 'mention' }, t('roomPolicyMention')),
             ),
           ),
+          form.policy === 'leader'
+            ? h(
+                Field,
+                { id: 'dshb-room-leader', label: t('roomLeader'), hint: t('roomLeaderHint') },
+                form.memberIds.length === 0
+                  ? h('div', { className: 'dshb-hint' }, t('roomLeaderNone'))
+                  : h(
+                      'select',
+                      {
+                        id: 'dshb-room-leader',
+                        className: 'dshb-select',
+                        value: form.leaderId,
+                        onChange: (event) => update('leaderId', event.target.value),
+                      },
+                      h('option', { value: '' }, t('roomLeaderNone')),
+                      (bots || [])
+                        .filter((bot) => form.memberIds.includes(bot.id))
+                        .map((bot) => h('option', { key: bot.id, value: bot.id }, `${bot.emoji || '🤖'} ${bot.name}`)),
+                    ),
+              )
+            : null,
           h(
             'div',
             { className: 'dshb-fieldGrid' },
@@ -1295,7 +1341,10 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
               ? h('span', { className: 'dshb-chip' }, t('roomNoMembers'))
               : members.map((bot) => h('span', { key: bot.id, className: 'dshb-chip' }, `${bot.emoji || '🤖'} ${bot.name}`)),
             h('span', { className: 'dshb-chip' }, `${members.length} ${t('memberCount')}`),
-            h('span', { className: 'dshb-chip' }, room.policy === 'mention' ? t('policyMentionShort') : t('policyAllShort')),
+            h('span', { className: 'dshb-chip' }, policyShort(t, room.policy)),
+            room.leaderId !== undefined && room.leaderId !== ''
+              ? h('span', { className: 'dshb-chip' }, `👑 ${(bots || []).find((bot) => bot.id === room.leaderId)?.name || room.leaderId}`)
+              : null,
             h('span', { className: 'dshb-chip' }, `${t('roomMaxHops')} ${room.maxHops ?? 0}`),
             h('span', { className: 'dshb-chip' }, `${t('roomBudget')} ${room.budget ?? 8}`),
             room.live !== null && room.live !== undefined
@@ -1419,7 +1468,7 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
               ),
             ),
           ),
-          h('div', { className: 'dshb-note' }, t('roomDispatchNote')),
+          h('div', { className: 'dshb-note' }, room.policy === 'leader' ? t('roomDispatchNoteLeader') : t('roomDispatchNote')),
         ),
       );
     }
@@ -1668,7 +1717,10 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
                 ),
               ),
               h('span', { className: 'dshb-badge' }, `${members.length} ${t('memberCount')}`),
-              h('span', { className: 'dshb-badge' }, room.policy === 'mention' ? t('policyMentionShort') : t('policyAllShort')),
+              h('span', { className: 'dshb-badge' }, policyShort(t, room.policy)),
+              room.leaderId !== undefined && room.leaderId !== ''
+                ? h('span', { className: 'dshb-badge' }, '👑')
+                : null,
             ),
           ),
           h(

@@ -212,12 +212,18 @@ export function apply(ctx) {
     return {
       version: 4,
       bots: hydrated,
-      rooms: rooms.map((room) => ({
-        ...room,
-        maxHops: clampInt(room.maxHops, DEFAULT_MAX_HOPS, 0, 5),
-        budget: clampInt(room.budget, DEFAULT_BUDGET, 1, 30),
-        transcript: Array.isArray(room.transcript) ? room.transcript : [],
-      })),
+      rooms: rooms.map((room) => {
+        const memberIds = Array.isArray(room.memberIds) ? room.memberIds : [];
+        return {
+          ...room,
+          memberIds,
+          policy: normalizePolicy(room.policy),
+          leaderId: memberIds.includes(room.leaderId) ? room.leaderId : '',
+          maxHops: clampInt(room.maxHops, DEFAULT_MAX_HOPS, 0, 5),
+          budget: clampInt(room.budget, DEFAULT_BUDGET, 1, 30),
+          transcript: Array.isArray(room.transcript) ? room.transcript : [],
+        };
+      }),
     };
   }
 
@@ -275,6 +281,7 @@ export function apply(ctx) {
       emoji: room.emoji,
       memberIds: room.memberIds,
       policy: room.policy,
+      leaderId: room.leaderId || '',
       maxHops: room.maxHops,
       budget: room.budget,
       transcript: room.transcript,
@@ -611,7 +618,13 @@ export function apply(ctx) {
   }
 
   function normalizePolicy(value) {
-    return value === 'mention' ? 'mention' : 'all';
+    return value === 'mention' || value === 'leader' ? value : 'all';
+  }
+
+  function pickLeader(value, memberIds, state) {
+    if (typeof value !== 'string' || value.length === 0) return '';
+    if (!memberIds.includes(value)) return '';
+    return state.bots.some((bot) => bot.id === value) ? value : '';
   }
 
   function pushTranscript(room, entry) {
@@ -625,12 +638,19 @@ export function apply(ctx) {
   async function createRoom(body, state) {
     const name = text(body.name, NAME_LIMIT) || '新房间';
     const now = Date.now();
+    const memberIds = normalizeMembers(body.memberIds, state);
+    let leaderId = pickLeader(body.leaderId, memberIds, state);
+    const policy = body.policy === undefined
+      ? (leaderId.length > 0 ? 'leader' : 'all')
+      : normalizePolicy(body.policy);
+    if (policy === 'leader' && leaderId.length === 0) leaderId = memberIds[0] || '';
     const room = {
       id: `room-${randomUUID().slice(0, 8)}`,
       name,
       emoji: text(body.emoji, 8) || '💬',
-      memberIds: normalizeMembers(body.memberIds, state),
-      policy: normalizePolicy(body.policy),
+      memberIds,
+      policy,
+      leaderId,
       maxHops: clampInt(body.maxHops, DEFAULT_MAX_HOPS, 0, 5),
       budget: clampInt(body.budget, DEFAULT_BUDGET, 1, 30),
       transcript: [],
@@ -649,6 +669,9 @@ export function apply(ctx) {
     if (typeof body.emoji === 'string') room.emoji = text(body.emoji, 8) || room.emoji;
     if (body.memberIds !== undefined) room.memberIds = normalizeMembers(body.memberIds, state);
     if (body.policy !== undefined) room.policy = normalizePolicy(body.policy);
+    if (body.leaderId !== undefined) room.leaderId = pickLeader(body.leaderId, room.memberIds, state);
+    if (room.policy === 'leader' && !room.memberIds.includes(room.leaderId)) room.leaderId = room.memberIds[0] || '';
+    if (!room.memberIds.includes(room.leaderId)) room.leaderId = '';
     if (body.maxHops !== undefined) room.maxHops = clampInt(body.maxHops, room.maxHops, 0, 5);
     if (body.budget !== undefined) room.budget = clampInt(body.budget, room.budget, 1, 30);
     room.updatedAt = Date.now();
@@ -672,25 +695,71 @@ export function apply(ctx) {
       const who = entry.from === 'user' ? '用户' : entry.from === 'system' ? '系统' : names.get(entry.from) || '成员';
       return `- ${who}：${entry.text}`;
     });
+    const roster = room.memberIds
+      .map((id) => state.bots.find((bot) => bot.id === id))
+      .filter(Boolean)
+      .map((bot) => {
+        const persona = String(bot.persona || '').replace(/\s+/gu, ' ').slice(0, 140);
+        return `- ${bot.emoji} ${bot.name}${bot.id === room.leaderId ? '（Leader）' : ''}：${persona}`;
+      })
+      .join('\n');
     return {
       members: room.memberIds.map((id) => names.get(id) || id).join('、') || '（暂无成员）',
+      roster: roster || '（暂无成员）',
       tail: lines.join('\n'),
     };
   }
 
   function targetsFor(room, state, userText) {
     const members = state.bots.filter((bot) => room.memberIds.includes(bot.id));
-    if (room.policy === 'all') return { targets: members, broadcast: false };
+    if (room.policy === 'leader') {
+      const leader = members.find((bot) => bot.id === room.leaderId);
+      return { mode: 'leader', targets: leader === undefined ? [] : [leader], broadcast: false, leader };
+    }
+    if (room.policy === 'all') return { mode: 'all', targets: members, broadcast: false };
     const targeted = members.filter((bot) => userText.includes(`@${bot.name}`) || userText.includes(`@${bot.id}`));
-    if (targeted.length > 0) return { targets: targeted, broadcast: false };
+    if (targeted.length > 0) return { mode: 'mention', targets: targeted, broadcast: false };
     // mention 房间没写 @ 时不能静默丢弃：退化为全员派发，避免"发了没反应"。
-    return { targets: members, broadcast: members.length > 0 };
+    return { mode: 'mention', targets: members, broadcast: members.length > 0 };
   }
 
-  function dispatchContent(room, context, bot, speakerName, hop) {
-    const intro = speakerName === undefined
-      ? '请就房间里的话题给出你的回应。'
-      : `这是自动接续的第 ${hop} 轮：上一条发言来自「${speakerName}」，请直接回应它的内容（同意/补充/反驳都行）。`;
+  function leaderContent(room, context, bot, userText) {
+    const memory = (bot.memory || '').trim();
+    const lines = [
+      `【群聊房间：${room.name}】你现在是本房间的 Leader（调度者）：用户只跟你对话，由你决定这条消息给谁看。`,
+      '',
+      '成员岗位：',
+      context.roster,
+    ];
+    if (memory.length > 0) lines.push('', '【长期记忆】', memory.slice(0, 4000));
+    lines.push(
+      '',
+      '最近消息：',
+      context.tail,
+      '',
+      '用户刚发来这条消息（原样）：',
+      userText,
+      '',
+      '做两件事：',
+      '1) 先直接回应用户：确认需求、必要的追问，或你的判断。简短，最多 4 句。',
+      '2) 另起一行输出派发指令，严格只写一行：',
+      'ROUTE: @名字1, @名字2',
+      '也可以写 ROUTE: ALL（全员）或 ROUTE: NONE（这一轮不打扰其他成员）。',
+      '只派给确实需要看到这条消息的成员；拿不准就 NONE。他们收到后会各自回应，你不用替他们说话。',
+      '不要复述规则，不要假扮其他成员。',
+    );
+    return lines.join('\n');
+  }
+
+  function dispatchContent(room, context, bot, speakerName, hop, options) {
+    if (options !== undefined && options.role === 'leader') {
+      return leaderContent(room, context, bot, options.userText || '');
+    }
+    const intro = options !== undefined && options.routed
+      ? `Leader「${speakerName}」把用户这条消息交给你，请从你的岗位角度回应。`
+      : speakerName === undefined
+        ? '请就房间里的话题给出你的回应。'
+        : `这是自动接续的第 ${hop} 轮：上一条发言来自「${speakerName}」，请直接回应它的内容（同意/补充/反驳都行）。`;
     const memory = (bot.memory || '').trim();
     const lines = [
       `【群聊房间：${room.name}】`,
@@ -709,20 +778,21 @@ export function apply(ctx) {
     return lines.join('\n');
   }
 
-  async function dispatchRound(room, state, targets, speakerName, hop) {
+  async function dispatchRound(room, state, targets, speakerName, hop, options) {
     const context = roomContext(room, state);
     const failures = [];
+    const role = options !== undefined && options.role === 'leader' ? 'leader' : 'member';
     for (const bot of targets) {
       try {
         await ctx.sessionController.prompt(
           {
             sessionId: bot.sessionId,
             requestId: randomUUID(),
-            content: [{ type: 'text', text: dispatchContent(room, context, bot, speakerName, hop) }],
+            content: [{ type: 'text', text: dispatchContent(room, context, bot, speakerName, hop, options) }],
           },
           new AbortController().signal,
         );
-        pending.set(String(bot.sessionId), { kind: 'room', roomId: room.id, hop, at: Date.now() });
+        pending.set(String(bot.sessionId), { kind: 'room', roomId: room.id, hop, role, at: Date.now() });
       } catch (error) {
         const detail = error && typeof error === 'object' && error.details && error.details.reason
           ? `: ${String(error.details.reason)}`
@@ -742,8 +812,21 @@ export function apply(ctx) {
     pushTranscript(room, { from: 'user', name: '我', text: userText });
     runtime.set(room.id, { hop: 0, used: 0 });
     const plan = targetsFor(room, state, userText);
-    const failures = await dispatchRound(room, state, plan.targets, undefined, 0);
-    if (plan.targets.length > 0) {
+    const failures = await dispatchRound(room, state, plan.targets, undefined, 0, plan.mode === 'leader'
+      ? { role: 'leader', userText }
+      : undefined);
+    if (plan.mode === 'leader') {
+      if (plan.targets.length === 0) {
+        pushTranscript(room, { from: 'system', name: 'system', text: '这个房间还没有设置 Leader，先在编辑里选一个' });
+      } else {
+        const leader = plan.targets[0];
+        pushTranscript(room, {
+          from: 'system',
+          name: 'system',
+          text: `已交给 Leader「${leader.emoji} ${leader.name}」，由它决定这条消息给谁看${failures.length > 0 ? `（派发失败：${failures.map((f) => f.split(':')[0]).join('、')}）` : ''}`,
+        });
+      }
+    } else if (plan.targets.length > 0) {
       pushTranscript(room, {
         from: 'system',
         name: 'system',
@@ -770,6 +853,73 @@ export function apply(ctx) {
     await saveState(state);
   }
 
+  const ROUTE_PATTERN = /^\s*(?:ROUTE|路由|派发(?:给)?)\s*[:：]\s*(.+?)\s*$/imu;
+
+  function splitRouting(replyText) {
+    const match = ROUTE_PATTERN.exec(replyText);
+    if (match === null) return { text: replyText.trim(), spec: undefined };
+    const visible = replyText.replace(match[0], '').replace(/\n{3,}/gu, '\n\n').trim();
+    return { text: visible, spec: match[1].trim() };
+  }
+
+  function resolveRouteTargets(spec, room, state, leaderId) {
+    const members = state.bots.filter((bot) => room.memberIds.includes(bot.id) && bot.id !== leaderId);
+    const normalized = spec.replace(/^@/u, '').trim();
+    if (/^(?:ALL|全员|所有人|全部|所有人可见)$/iu.test(normalized)) return { targets: members, all: true };
+    if (/^(?:NONE|无|不派发|沉默|没有人|无需)$/iu.test(normalized)) return { targets: [], all: false };
+    const parts = normalized
+      .split(/[,，、;；\s]+/u)
+      .map((part) => part.replace(/^@/u, '').trim())
+      .filter((part) => part.length > 0);
+    const targets = [];
+    for (const part of parts) {
+      const hit = members.find((bot) => bot.name === part || bot.id === part)
+        || members.find((bot) => bot.name.includes(part) || part.includes(bot.name));
+      if (hit !== undefined && !targets.includes(hit)) targets.push(hit);
+    }
+    return { targets, all: false };
+  }
+
+  async function handleLeaderReply(entry, room, bot, replyText) {
+    const state = cachedState;
+    const live = runtime.get(room.id) ?? { hop: 0, used: 0 };
+    const budget = clampInt(room.budget, DEFAULT_BUDGET, 1, 30);
+    if (live.used >= budget) {
+      pushTranscript(room, { from: 'system', name: 'system', text: `本轮已达回复上限（${budget}）` });
+      await saveState(state);
+      return;
+    }
+    const { text, spec } = splitRouting(replyText);
+    live.used += 1;
+    live.hop = 0;
+    runtime.set(room.id, live);
+    pushTranscript(room, { from: bot.id, name: bot.name, text: (text.length > 0 ? text : replyText).slice(0, REPLY_LIMIT), hop: 0, role: 'leader' });
+
+    if (spec === undefined) {
+      pushTranscript(room, { from: 'system', name: 'system', text: `Leader「${bot.name}」没有给出派发指令，本轮只有它回应` });
+      await saveState(state);
+      return;
+    }
+    const route = resolveRouteTargets(spec, room, state, bot.id);
+    if (route.targets.length === 0) {
+      pushTranscript(room, { from: 'system', name: 'system', text: `调度：Leader「${bot.name}」决定本轮不打扰其他成员` });
+      await saveState(state);
+      return;
+    }
+    pushTranscript(room, {
+      from: 'system',
+      name: 'system',
+      text: `调度：Leader「${bot.name}」把这条消息交给 ${route.targets.map((target) => target.name).join('、')}`,
+    });
+    live.hop = 1;
+    runtime.set(room.id, live);
+    const failures = await dispatchRound(room, state, route.targets, bot.name, 1, { role: 'member', routed: true });
+    if (failures.length > 0) {
+      pushTranscript(room, { from: 'system', name: 'system', text: `派发失败：${failures.join('；')}` });
+    }
+    await saveState(state);
+  }
+
   async function handleRelay(sessionId, replyText) {
     const entry = pending.get(sessionId);
     if (entry === undefined) return;
@@ -783,6 +933,10 @@ export function apply(ctx) {
     if (room === undefined) return;
     const bot = state.bots.find((candidate) => String(candidate.sessionId) === sessionId);
     if (bot === undefined || !room.memberIds.includes(bot.id)) return;
+    if (entry.role === 'leader') {
+      await handleLeaderReply(entry, room, bot, replyText);
+      return;
+    }
 
     const live = runtime.get(room.id) ?? { hop: entry.hop ?? 0, used: 0 };
     const budget = clampInt(room.budget, DEFAULT_BUDGET, 1, 30);
@@ -793,7 +947,13 @@ export function apply(ctx) {
     }
     live.used += 1;
     runtime.set(room.id, live);
-    pushTranscript(room, { from: bot.id, name: bot.name, text: replyText, hop: entry.hop ?? 0 });
+    pushTranscript(room, { from: bot.id, name: bot.name, text: replyText.slice(0, REPLY_LIMIT), hop: entry.hop ?? 0 });
+
+    // Leader 模式下由 Leader 决定派发对象，成员回复不再自动接续（否则又变成全员刷屏）。
+    if (room.policy === 'leader') {
+      await saveState(state);
+      return;
+    }
 
     const nextHop = (entry.hop ?? 0) + 1;
     const maxHops = clampInt(room.maxHops, DEFAULT_MAX_HOPS, 0, 5);
@@ -824,7 +984,7 @@ export function apply(ctx) {
         pending.delete(sessionId);
         return;
       }
-      void handleRelay(sessionId, replyText.slice(0, Math.max(REPLY_LIMIT, MEMORY_LIMIT))).catch((error) => {
+      void handleRelay(sessionId, replyText).catch((error) => {
         ctx.logger?.warn?.(`dsh-bots: reply relay failed: ${String(error)}`);
       });
     } catch (error) {
@@ -912,7 +1072,8 @@ export function apply(ctx) {
           lines.push('', '房间：');
           for (const room of state.rooms) {
             const members = room.memberIds.map((memberId) => state.bots.find((bot) => bot.id === memberId)?.name || memberId).join('、');
-            lines.push(`- ${room.emoji} ${room.name}｜id=${room.id}｜policy=${room.policy}｜成员=${members}`);
+            const leader = state.bots.find((bot) => bot.id === room.leaderId);
+            lines.push(`- ${room.emoji} ${room.name}｜id=${room.id}｜policy=${room.policy}${leader ? `｜Leader=${leader.name}` : ''}｜成员=${members}`);
           }
         }
         return lines.join('\n');
@@ -982,12 +1143,13 @@ export function apply(ctx) {
     })),
     ctx.tools.register(factoryTool({
       name: 'bots_room_create',
-      description: '创建一个群聊房间，把若干 Bot 拉进来互相协作。members 用 Bot 名字/id 列表（逗号分隔）。policy=mention 时只有被 @ 的 Bot 回复；policy=all 时全员回复（更费 token）。',
+      description: '创建一个群聊房间，把若干 Bot 拉进来互相协作。members 用 Bot 名字/id 列表（逗号分隔）。policy=leader（推荐）时只有 Leader 跟你对话，由 Leader 决定这条消息派给谁；policy=mention 时只有被 @ 的 Bot 回复，没写 @ 就全员回复；policy=all 时全员回复（更费 token）。',
       properties: {
         name: { type: 'string', required: true, description: '房间名' },
         emoji: { type: 'string', description: '单个 emoji，默认 💬' },
         members: { type: 'string', required: true, description: '成员名字或 id，逗号分隔' },
-        policy: { type: 'string', description: 'all 或 mention，默认 mention' },
+        leader: { type: 'string', description: 'Leader 的名字或 id（policy=leader 时必填，用于调度）' },
+        policy: { type: 'string', description: 'leader、mention 或 all，默认 leader' },
         maxHops: { type: 'number', description: '自动接续轮数上限，默认 2，0 关闭' },
         budget: { type: 'number', description: '每条用户消息的 Bot 回复预算，默认 6' },
       },
@@ -995,19 +1157,22 @@ export function apply(ctx) {
         const state = await ready;
         const memberIds = resolveMemberIds(args.members, state);
         if (memberIds.length === 0) throw new Error(`没有匹配到任何 Bot：${String(args.members)}`);
+        const leaderIds = args.leader === undefined ? [] : resolveMemberIds(args.leader, state);
         const room = await createRoom({
           name: args.name,
           emoji: args.emoji,
           memberIds,
-          policy: args.policy,
+          leaderId: leaderIds.length > 0 ? leaderIds[0] : undefined,
+          policy: args.policy === undefined ? 'leader' : args.policy,
           maxHops: args.maxHops,
           budget: args.budget,
         }, state);
         const names = memberIds.map((memberId) => state.bots.find((bot) => bot.id === memberId)?.name || memberId).join('、');
+        const leader = state.bots.find((bot) => bot.id === room.leaderId);
         return [
           `已创建房间：${room.emoji} ${room.name}（id=${room.id}）`,
           `成员：${names}`,
-          `策略：${room.policy}｜自动接续 ${room.maxHops} 轮｜预算 ${room.budget} 条`,
+          `策略：${room.policy}${leader ? `｜Leader=${leader.name}` : ''}｜自动接续 ${room.maxHops} 轮｜预算 ${room.budget} 条`,
           '下一步：用户在侧栏 Bots 面板打开这个房间就能开始对话。',
         ].join('\n');
       },

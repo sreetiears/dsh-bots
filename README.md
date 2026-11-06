@@ -111,6 +111,10 @@ files stay on disk. Deleting a room removes its transcript only.
 
 ## Changelog
 
+- **0.8.3** — `leader` room policy: only the room leader talks to the user and decides which members
+  see each message (`ROUTE: @a, @b`, `ROUTE: ALL`, `ROUTE: NONE`); member replies no longer chain
+  on their own. New rooms default to leader mode when a leader is picked; existing rooms can switch
+  in the room dialog, which now shows a leader badge.
 - **0.8.2** — room composer sends on `Enter` (`Shift+Enter` adds a line, IME-safe); transcripts
   render Markdown (headings, lists, tables, fenced code, quotes, links, inline styles); a message
   without an `@name` in a `mention` room now broadcasts to every member instead of being dropped,
