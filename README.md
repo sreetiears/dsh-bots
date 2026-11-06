@@ -37,6 +37,15 @@ workspace directory, avatar and persona — and **rooms** to dispatch a message 
     other members, so bots can talk to each other; `0` disables auto rounds.
   - **Reply budget** (`budget`, default 8): at most that many bot replies per user message.
   - A bot that answers `（沉默）` stays silent and does not trigger another round.
+- **Memory per bot** — each bot has a long-term memory file (`<data root>/memory/<botId>.md`):
+  - editable from the bot card ("Memory");
+  - injected into room dispatches and routine prompts;
+  - "Let the bot summarize" asks the bot to distill its own conversation into the memory file,
+    and the reply is captured back into the file (relay, not a fake).
+- **Routines per bot** — interval-based scheduled instructions ("Routines"):
+  - `name`, `prompt`, `every N minutes`, enable/disable;
+  - the host checks every 30 s and prompts the bot when a routine is due;
+  - `lastRunAt` is persisted, so restarts do not double-fire immediately.
 - **All sessions** — sessions that are not registered as bots stay reachable in the same panel.
 - **JSON API** — the same data is reachable from local automation:
   - `GET /dsh-bots/api` → `{ version, bots, rooms, presets, dataRoot }`
@@ -62,8 +71,9 @@ controller, workspace registry and the HTTP carrier).
 | Path | Content |
 |---|---|
 | `$DSH_BOTS_DIR` or `$DSH_HOME/dsh-bots` | data root (override with `DSH_BOTS_DIR`) |
-| `<data root>/bots.json` | bot + room registry (profiles, members, transcripts) |
+| `<data root>/bots.json` | bot + room registry (profiles, routines, members, transcripts) |
 | `<data root>/workspaces/<slug>` | one working directory per bot |
+| `<data root>/memory/<botId>.md` | one long-term memory file per bot |
 
 Deleting a bot removes its registry entry, drops it from rooms and archives its session;
 files stay on disk. Deleting a room removes its transcript only.
@@ -80,8 +90,8 @@ files stay on disk. Deleting a room removes its transcript only.
 
 ## Roadmap
 
-- **v0.5** — per-bot memory files, memory-curator routine, scheduled routines.
 - **v0.6** — connectors (webhook / IM) and per-bot permissions.
+- **v0.7** — richer routines (daily times), memory search, room policy for auto rounds.
 
 ## License
 

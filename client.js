@@ -47,6 +47,27 @@ window.__ModuleLoader__.load({
       confirmDeleteRoom: 'Delete this room? Messages are removed; bot sessions stay.',
       badgeNoPreset: 'default preset',
       personaEmpty: 'No persona yet',
+      memory: 'Memory',
+      routines: 'Routines',
+      memoryTitle: 'Long-term memory',
+      memoryHint: 'Stored as memory/<botId>.md and injected into room and routine prompts.',
+      memoryEmpty: 'No memory yet. Save notes below, or let the bot summarize itself.',
+      memorySave: 'Save memory',
+      memoryDistill: 'Let the bot summarize',
+      memoryDistilling: 'Asking the bot…',
+      memorySavedAt: 'updated',
+      routineTitle: 'Scheduled routines',
+      routineHint: 'The host prompts this bot on the interval below; lasts until you disable it.',
+      routineName: 'Name',
+      routinePrompt: 'Instruction',
+      routineMinutes: 'Every (minutes)',
+      routineAdd: 'Add routine',
+      routineEmpty: 'No routines yet',
+      routineLastRun: 'last run',
+      routineEnable: 'Enabled',
+      routineDelete: 'Delete',
+      badgeMemory: 'memory',
+      badgeRoutines: 'routines',
       roomName: 'Room name',
       roomMembers: 'Member bots',
       roomMembersEmpty: 'No bots yet — create one first.',
@@ -114,6 +135,27 @@ window.__ModuleLoader__.load({
       confirmDeleteRoom: '删除这个房间？房间记录会删除，Bot 会话保留。',
       badgeNoPreset: '默认预设',
       personaEmpty: '还没写岗位说明书',
+      memory: '记忆',
+      routines: '例行',
+      memoryTitle: '长期记忆',
+      memoryHint: '保存为 memory/<botId>.md，并注入到房间和例行任务的提示里。',
+      memoryEmpty: '还没有记忆。可以在下面手写，也可以让 Bot 自己整理。',
+      memorySave: '保存记忆',
+      memoryDistill: '让 Bot 自己整理',
+      memoryDistilling: '正在让 Bot 整理…',
+      memorySavedAt: '更新于',
+      routineTitle: '例行任务',
+      routineHint: '宿主会按下面的周期给这个 Bot 发指令，直到你停用。',
+      routineName: '名称',
+      routinePrompt: '指令',
+      routineMinutes: '每（分钟）',
+      routineAdd: '添加例行',
+      routineEmpty: '还没有例行任务',
+      routineLastRun: '上次运行',
+      routineEnable: '启用',
+      routineDelete: '删除',
+      badgeMemory: '记忆',
+      badgeRoutines: '例行',
       roomName: '房间名',
       roomMembers: '成员 Bot',
       roomMembersEmpty: '还没有 Bot，先建一个吧。',
@@ -433,6 +475,180 @@ window.__ModuleLoader__.load({
       );
     }
 
+    function MemoryDialog(props) {
+      const { t, bot, onCancel, onSave, onDistill } = props;
+      const [value, setValue] = React.useState(bot.memory || '');
+      const [busy, setBusy] = React.useState(false);
+      const [distilling, setDistilling] = React.useState(false);
+      const [error, setError] = React.useState('');
+
+      React.useEffect(() => {
+        setValue(bot.memory || '');
+      }, [bot.memory]);
+
+      const save = async () => {
+        setBusy(true);
+        setError('');
+        try {
+          await onSave(bot.id, value);
+        } catch (failure) {
+          setError(String(failure && failure.message ? failure.message : failure));
+          setBusy(false);
+        }
+      };
+      const distill = async () => {
+        setDistilling(true);
+        setError('');
+        try {
+          await onDistill(bot.id);
+        } catch (failure) {
+          setError(String(failure && failure.message ? failure.message : failure));
+        } finally {
+          setDistilling(false);
+        }
+      };
+
+      return h(
+        'div',
+        {
+          className: 'dshb-overlay',
+          onMouseDown: (event) => {
+            if (event.target === event.currentTarget) onCancel();
+          },
+        },
+        h(
+          'div',
+          { className: 'dshb-dialog', style: { colorScheme: darkTheme() ? 'dark' : 'light' } },
+          h('h2', { className: 'dshb-dialogTitle' }, `${bot.emoji || '🤖'} ${bot.name} · ${t('memoryTitle')}`),
+          h(
+            'div',
+            { className: 'dshb-field' },
+            h('textarea', {
+              className: 'dshb-textarea',
+              style: { minHeight: '220px' },
+              value,
+              placeholder: t('memoryEmpty'),
+              onChange: (event) => setValue(event.target.value),
+            }),
+            h('div', { className: 'dshb-hint' }, t('memoryHint')),
+            bot.memoryAt ? h('div', { className: 'dshb-hint' }, `${t('memorySavedAt')} ${timeLabel(bot.memoryAt)}`) : null,
+          ),
+          error.length > 0 ? h('div', { className: 'dshb-error' }, error) : null,
+          h(
+            'div',
+            { className: 'dshb-dialogActions' },
+            h('button', { type: 'button', className: 'dshb-btn quiet', onClick: onCancel, disabled: busy || distilling }, t('formCancel')),
+            h('button', { type: 'button', className: 'dshb-btn quiet', onClick: distill, disabled: busy || distilling }, distilling ? t('memoryDistilling') : t('memoryDistill')),
+            h('button', { type: 'button', className: 'dshb-btn', onClick: save, disabled: busy || distilling }, t('memorySave')),
+          ),
+        ),
+      );
+    }
+
+    function RoutineDialog(props) {
+      const { t, bot, onCancel, onAdd, onUpdate, onDelete } = props;
+      const [form, setForm] = React.useState({ name: '', prompt: '', minutes: '60' });
+      const [error, setError] = React.useState('');
+      const [busy, setBusy] = React.useState(false);
+      const routines = bot.routines || [];
+      const update = (key, value) => setForm((current) => ({ ...current, [key]: value }));
+
+      const add = async () => {
+        if (form.prompt.trim().length === 0) return;
+        setBusy(true);
+        setError('');
+        try {
+          await onAdd(bot.id, { name: form.name.trim(), prompt: form.prompt.trim(), minutes: Number(form.minutes) });
+          setForm({ name: '', prompt: '', minutes: form.minutes });
+        } catch (failure) {
+          setError(String(failure && failure.message ? failure.message : failure));
+        } finally {
+          setBusy(false);
+        }
+      };
+
+      return h(
+        'div',
+        {
+          className: 'dshb-overlay',
+          onMouseDown: (event) => {
+            if (event.target === event.currentTarget) onCancel();
+          },
+        },
+        h(
+          'div',
+          { className: 'dshb-dialog', style: { colorScheme: darkTheme() ? 'dark' : 'light' } },
+          h('h2', { className: 'dshb-dialogTitle' }, `${bot.emoji || '🤖'} ${bot.name} · ${t('routineTitle')}`),
+          routines.length === 0
+            ? h('div', { className: 'dshb-hint' }, t('routineEmpty'))
+            : h(
+                'div',
+                { className: 'dshb-checks', style: { maxHeight: '200px' } },
+                routines.map((routine) =>
+                  h(
+                    'div',
+                    { key: routine.id, className: 'dshb-check', style: { justifyContent: 'space-between' } },
+                    h(
+                      'span',
+                      { style: { flex: 1 } },
+                      `${routine.name} · ${routine.minutes}min${routine.enabled === false ? ' (off)' : ''}`,
+                    ),
+                    h('button', { type: 'button', className: 'dshb-iconBtn', onClick: () => onUpdate(bot.id, routine.id, { enabled: routine.enabled === false }) }, routine.enabled === false ? '开' : '停'),
+                    h('button', { type: 'button', className: 'dshb-iconBtn', onClick: () => onDelete(bot.id, routine.id) }, t('routineDelete')),
+                  ),
+                ),
+              ),
+          h(
+            'div',
+            { className: 'dshb-fieldGrid' },
+            h(
+              Field,
+              { id: 'dshb-rt-name', label: t('routineName') },
+              h('input', {
+                id: 'dshb-rt-name',
+                className: 'dshb-input',
+                value: form.name,
+                maxLength: 80,
+                onChange: (event) => update('name', event.target.value),
+                placeholder: '每日选题',
+              }),
+            ),
+            h(
+              Field,
+              { id: 'dshb-rt-min', label: t('routineMinutes') },
+              h('input', {
+                id: 'dshb-rt-min',
+                className: 'dshb-input',
+                type: 'number',
+                min: 1,
+                max: 10080,
+                value: form.minutes,
+                onChange: (event) => update('minutes', event.target.value),
+              }),
+            ),
+          ),
+          h(
+            Field,
+            { id: 'dshb-rt-prompt', label: t('routinePrompt'), hint: t('routineHint') },
+            h('textarea', {
+              id: 'dshb-rt-prompt',
+              className: 'dshb-textarea',
+              value: form.prompt,
+              onChange: (event) => update('prompt', event.target.value),
+              placeholder: '整理今天的待办，列出三条最重要的。',
+            }),
+          ),
+          error.length > 0 ? h('div', { className: 'dshb-error' }, error) : null,
+          h(
+            'div',
+            { className: 'dshb-dialogActions' },
+            h('button', { type: 'button', className: 'dshb-btn quiet', onClick: onCancel }, t('formCancel')),
+            h('button', { type: 'button', className: 'dshb-btn', onClick: add, disabled: busy || form.prompt.trim().length === 0 }, t('routineAdd')),
+          ),
+        ),
+      );
+    }
+
     function RoomDialog(props) {
       const { t, bots, room, onCancel, onSubmit } = props;
       const editing = room !== null && room !== undefined;
@@ -723,6 +939,8 @@ window.__ModuleLoader__.load({
       const [botDialog, setBotDialog] = React.useState(null);
       const [roomDialog, setRoomDialog] = React.useState(null);
       const [activeRoomId, setActiveRoomId] = React.useState(null);
+      const [memoryBotId, setMemoryBotId] = React.useState(null);
+      const [routineBotId, setRoutineBotId] = React.useState(null);
 
       const absorb = (data) => {
         if (Array.isArray(data.bots)) setBots(data.bots);
@@ -780,6 +998,30 @@ window.__ModuleLoader__.load({
         } catch (failure) {
           setError(String(failure && failure.message ? failure.message : failure));
         }
+      };
+
+      const saveMemory = async (botId, memory) => {
+        absorb(await request({ action: 'botMemoryUpdate', botId, memory }));
+        setMemoryBotId(null);
+      };
+
+      const distillMemory = async (botId) => {
+        absorb(await request({ action: 'botMemoryDistill', botId }));
+        window.setTimeout(() => {
+          load().catch(() => {});
+        }, 9000);
+      };
+
+      const addRoutine = async (botId, payload) => {
+        absorb(await request({ action: 'routineAdd', botId, ...payload }));
+      };
+
+      const updateRoutine = async (botId, routineId, patch) => {
+        absorb(await request({ action: 'routineUpdate', botId, routineId, ...patch }));
+      };
+
+      const deleteRoutine = async (botId, routineId) => {
+        absorb(await request({ action: 'routineDelete', botId, routineId }));
       };
 
       const submitRoom = async (payload) => {
@@ -851,10 +1093,14 @@ window.__ModuleLoader__.load({
           h('span', { className: 'dshb-name' }, bot.name),
           h('span', { className: 'dshb-persona' }, bot.persona && bot.persona.length > 0 ? bot.persona : t('personaEmpty')),
           h('span', { className: 'dshb-badge' }, bot.presetId ? bot.presetId : t('badgeNoPreset')),
+          bot.memory && bot.memory.trim().length > 0 ? h('span', { className: 'dshb-badge' }, t('badgeMemory')) : null,
+          bot.routines && bot.routines.length > 0 ? h('span', { className: 'dshb-badge' }, `${bot.routines.length} ${t('badgeRoutines')}`) : null,
         ),
         h(
           'span',
           { className: 'dshb-rowActions' },
+          h('button', { type: 'button', className: 'dshb-iconBtn', onClick: (event) => { event.stopPropagation(); setMemoryBotId(bot.id); } }, t('memory')),
+          h('button', { type: 'button', className: 'dshb-iconBtn', onClick: (event) => { event.stopPropagation(); setRoutineBotId(bot.id); } }, t('routines')),
           h('button', { type: 'button', className: 'dshb-iconBtn', onClick: (event) => { event.stopPropagation(); setBotDialog({ ...bot }); } }, t('actionEdit')),
           h('button', { type: 'button', className: 'dshb-iconBtn', onClick: (event) => { event.stopPropagation(); removeBot(bot); } }, t('actionDelete')),
         ),
@@ -1016,6 +1262,33 @@ window.__ModuleLoader__.load({
               onCancel: () => setRoomDialog(null),
               onSubmit: submitRoom,
             }),
+        memoryBotId === null
+          ? null
+          : (() => {
+              const bot = bots.find((candidate) => candidate.id === memoryBotId);
+              if (bot === undefined) return null;
+              return h(MemoryDialog, {
+                t,
+                bot,
+                onCancel: () => setMemoryBotId(null),
+                onSave: saveMemory,
+                onDistill: distillMemory,
+              });
+            })(),
+        routineBotId === null
+          ? null
+          : (() => {
+              const bot = bots.find((candidate) => candidate.id === routineBotId);
+              if (bot === undefined) return null;
+              return h(RoutineDialog, {
+                t,
+                bot,
+                onCancel: () => setRoutineBotId(null),
+                onAdd: addRoutine,
+                onUpdate: updateRoutine,
+                onDelete: deleteRoutine,
+              });
+            })(),
       );
     }
 
