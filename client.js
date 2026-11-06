@@ -142,8 +142,8 @@ window.__ModuleLoader__.load({
 .dshb-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
 .dshb-search{height:34px;width:180px;max-width:100%;min-width:0;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);padding:0 12px;font-size:13px;font-family:inherit;outline:none;box-sizing:border-box}
 .dshb-search:focus{border-color:var(--dsw-alias-border-l2)}
-.dshb-btn{height:34px;padding:0 14px;border-radius:8px;border:none;background:var(--dsw-alias-brand-primary);color:#fff;font-size:13px;font-family:inherit;font-weight:500;cursor:pointer;white-space:nowrap;max-width:100%}
-.dshb-btn:hover{filter:brightness(1.06)}
+.dshb-btn{height:34px;padding:0 14px;border-radius:8px;border:none;background:var(--dsw-alias-button-primary-fill, var(--dsw-alias-brand-primary, #111));color:var(--dsw-alias-label-primary-inverted, #fff);font-size:13px;font-family:inherit;font-weight:500;cursor:pointer;white-space:nowrap;max-width:100%}
+.dshb-btn:hover{background:var(--dsw-alias-button-primary-hover, var(--dsw-alias-brand-primary, #111))}
 .dshb-btn.quiet{background:transparent;color:var(--dsw-alias-label-secondary);border:1px solid var(--dsw-alias-border-l1)}
 .dshb-btn.quiet:hover{color:var(--dsw-alias-label-primary);filter:none}
 .dshb-btn:disabled{opacity:.55;cursor:default;filter:none}
@@ -195,7 +195,7 @@ window.__ModuleLoader__.load({
 .dshb-msg.system{align-self:center;align-items:center;max-width:100%}
 .dshb-msgWho{font-size:11px;color:var(--dsw-alias-label-secondary);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dshb-bubble{padding:8px 12px;border-radius:10px;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;box-sizing:border-box}
-.dshb-msg.user .dshb-bubble{background:var(--dsw-alias-brand-primary);color:#fff}
+.dshb-msg.user .dshb-bubble{background:var(--dsw-alias-button-primary-fill, var(--dsw-alias-brand-primary, #111));color:var(--dsw-alias-label-primary-inverted, #fff)}
 .dshb-msg.system .dshb-bubble{background:transparent;color:var(--dsw-alias-label-secondary);font-size:12px;padding:2px 8px}
 .dshb-composerRow{display:flex;gap:8px;align-items:flex-end;margin-top:12px;min-width:0}
 .dshb-composerRow .dshb-textarea{min-height:56px;flex:1}
