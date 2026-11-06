@@ -778,6 +778,20 @@ export function apply(ctx) {
     return { room: roomView(room), thread: removed };
   }
 
+  async function deleteMessage(body, state) {
+    const room = state.rooms.find((candidate) => candidate.id === body.roomId);
+    if (room === undefined) throw new Error(`room "${String(body.roomId)}" not found`);
+    const thread = room.threads.find((candidate) => candidate.id === body.threadId);
+    if (thread === undefined) throw new Error(`thread "${String(body.threadId)}" not found`);
+    const index = thread.transcript.findIndex((entry) => entry.id === body.messageId);
+    if (index < 0) throw new Error(`message "${String(body.messageId)}" not found`);
+    thread.transcript.splice(index, 1);
+    thread.updatedAt = Date.now();
+    room.updatedAt = Date.now();
+    await saveState(state);
+    return { room: roomView(room) };
+  }
+
   async function selectThread(body, state) {
     const room = state.rooms.find((candidate) => candidate.id === body.roomId);
     if (room === undefined) throw new Error(`room "${String(body.roomId)}" not found`);
@@ -1390,6 +1404,8 @@ export function apply(ctx) {
         await deleteThread(body, state);
       } else if (action === 'roomThreadSelect') {
         await selectThread(body, state);
+      } else if (action === 'roomMessageDelete') {
+        extra = await deleteMessage(body, state);
       } else {
         reply(res, 400, { error: `unknown action "${action}"` });
         return;

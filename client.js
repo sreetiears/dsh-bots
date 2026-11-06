@@ -116,6 +116,12 @@ window.__ModuleLoader__.load({
       threadRenamePrompt: 'Conversation name',
       threadDeleteConfirm: 'Delete this conversation and its messages?',
       threadLastOnly: 'Keep at least one conversation per room.',
+      msgCopy: 'Copy',
+      msgCopied: 'Copied',
+      msgResend: 'Resend',
+      msgDelete: 'Delete message',
+      msgDeleteConfirm: 'Delete this message?',
+      threadMore: 'All conversations',
       empty: 'Nothing here',
     };
     const ZH = {
@@ -227,6 +233,12 @@ window.__ModuleLoader__.load({
       threadRenamePrompt: '会话名称',
       threadDeleteConfirm: '删除这条会话和里面的消息？',
       threadLastOnly: '每个房间至少要保留一条会话。',
+      msgCopy: '复制',
+      msgCopied: '已复制',
+      msgResend: '重发',
+      msgDelete: '删除这条',
+      msgDeleteConfirm: '删除这条消息？',
+      threadMore: '全部会话',
       empty: '空空如也',
     };
     const DICT = { en: EN, de: EN, es: EN, fr: EN, ja: EN, pt: EN, ru: EN, zh: ZH };
@@ -376,6 +388,26 @@ window.__ModuleLoader__.load({
 .dshb-roomSettings{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:8px;font-size:11px;color:var(--dsw-alias-label-secondary);line-height:1.4}
 .dshb-roomSettings span{white-space:nowrap}
 .dshb-chip.live{gap:6px}
+.dshb-bubbleWrap{position:relative;max-width:100%;min-width:0}
+.dshb-msgActions{display:flex;gap:2px;margin-top:2px;opacity:0;transition:opacity .15s ease}
+.dshb-msg:hover .dshb-msgActions,.dshb-msgActions:focus-within{opacity:1}
+@media (hover:none){.dshb-msgActions{opacity:1}}
+.dshb-msg.user .dshb-msgActions{justify-content:flex-end}
+.dshb-msgAction{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;border:none;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer}
+.dshb-msgAction:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)}
+.dshb-msgAction.danger:hover{color:#d33}
+.dshb-ctxMenu{position:fixed;z-index:1000;min-width:140px;padding:4px;border-radius:10px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);box-shadow:0 8px 24px rgba(0,0,0,.18);display:flex;flex-direction:column}
+.dshb-ctxItem{text-align:left;padding:6px 10px;border:none;background:transparent;border-radius:6px;font-size:12px;color:var(--dsw-alias-label-primary);cursor:pointer}
+.dshb-ctxItem:hover{background:var(--dsw-alias-bg-layer-2)}
+.dshb-ctxItem.danger{color:#d33}
+.dshb-threadOverflow{position:relative;flex:0 0 auto}
+.dshb-threadMoreBtn{height:28px;padding:0 10px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font-size:12px;cursor:pointer;white-space:nowrap}
+.dshb-threadMoreBtn:hover{background:var(--dsw-alias-bg-layer-2)}
+.dshb-threadMenu{position:absolute;top:calc(100% + 6px);right:0;z-index:1000;min-width:220px;max-height:320px;overflow-y:auto;padding:4px;border-radius:10px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);box-shadow:0 8px 24px rgba(0,0,0,.18);display:flex;flex-direction:column;gap:2px}
+.dshb-threadMenuItem{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 10px;border:none;background:transparent;border-radius:6px;font-size:12px;color:var(--dsw-alias-label-primary);cursor:pointer;text-align:left}
+.dshb-threadMenuItem:hover{background:var(--dsw-alias-bg-layer-2)}
+.dshb-threadMenuItem.active{font-weight:600}
+.dshb-threads{overflow:visible;flex-wrap:nowrap}
 .dshb-composerHint{margin-top:8px;padding-top:0;border-top:none;font-size:11px;line-height:1.5;opacity:.85}
 .dshb-threadTab.active::after{content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:2px;border-radius:2px;background:var(--dsw-alias-brand-primary, #2f6fed)}
 .dshb-threadTab{position:relative}
@@ -470,6 +502,7 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
       trash: ['M4.5 7h15', 'M9.5 7V5.2h5V7', 'M6.8 7l.9 12.2h8.6L17.2 7'],
       back: ['M14.5 5.5 8 12l6.5 6.5'],
       send: ['M4.5 12 20 5.2l-6.6 15.4-2.3-6.9-6.6-1.7Z'],
+      copy: ['M9 9h10v10H9z', 'M5 15V5h10'],
       close: ['M6 6l12 12', 'M18 6 6 18'],
       bot: ['M12 8.2V5.2', 'M6.2 8.2h11.6v10.6H6.2z', 'M9.6 12.4h.01', 'M14.4 12.4h.01', 'M9.8 15.6h4.4'],
       spark: ['M12 4.5 13.6 9l4.5 1.6-4.5 1.6L12 16.7l-1.6-4.5L5.9 10.6 10.4 9 12 4.5Z'],
@@ -1313,6 +1346,104 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
       return h('div', { className: 'dshb-md' }, markdownBlocks(text));
     }
 
+    function MessageBubble(props) {
+      const { t, entry, isUser, isSystem, onResend, onDelete } = props;
+      const [menu, setMenu] = React.useState(null);
+      const [copied, setCopied] = React.useState(false);
+
+      React.useEffect(() => {
+        if (menu === null) return undefined;
+        const close = () => setMenu(null);
+        window.addEventListener('mousedown', close);
+        window.addEventListener('keydown', close);
+        return () => {
+          window.removeEventListener('mousedown', close);
+          window.removeEventListener('keydown', close);
+        };
+      }, [menu]);
+
+      const copy = async () => {
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(entry.text);
+          } else {
+            const area = document.createElement('textarea');
+            area.value = entry.text;
+            document.body.appendChild(area);
+            area.select();
+            document.execCommand('copy');
+            area.remove();
+          }
+          setCopied(true);
+          window.setTimeout(() => setCopied(false), 1200);
+        } catch (failure) {
+          /* clipboard unavailable: ignore */
+        }
+        setMenu(null);
+      };
+
+      const openMenu = (event) => {
+        event.preventDefault();
+        setMenu({ x: event.clientX, y: event.clientY });
+      };
+
+      const actions = [
+        { key: 'copy', label: copied ? t('msgCopied') : t('msgCopy'), icon: 'copy', run: copy },
+        isUser ? { key: 'resend', label: t('msgResend'), icon: 'send', run: () => { setMenu(null); onResend(entry); } } : null,
+        { key: 'delete', label: t('msgDelete'), icon: 'trash', danger: true, run: () => { setMenu(null); onDelete(entry); } },
+      ].filter(Boolean);
+
+      return h(
+        'div',
+        {
+          className: `dshb-bubbleWrap${isSystem ? ' system' : ''}`,
+          onContextMenu: isSystem ? undefined : openMenu,
+        },
+        h(
+          'div',
+          { className: 'dshb-bubble' },
+          isSystem ? entry.text : h(MarkdownText, { text: entry.text }),
+        ),
+        isSystem
+          ? null
+          : h(
+              'div',
+              { className: 'dshb-msgActions' },
+              actions.map((action) =>
+                h('button', {
+                  key: action.key,
+                  type: 'button',
+                  className: `dshb-msgAction${action.danger ? ' danger' : ''}`,
+                  title: action.label,
+                  'aria-label': action.label,
+                  onClick: (event) => {
+                    event.stopPropagation();
+                    action.run();
+                  },
+                }, icon(action.icon, 13)),
+              ),
+            ),
+        menu !== null
+          ? h(
+              'div',
+              {
+                className: 'dshb-ctxMenu',
+                style: { left: `${menu.x}px`, top: `${menu.y}px` },
+                onMouseDown: (event) => event.stopPropagation(),
+              },
+              actions.map((action) =>
+                h('button', {
+                  key: action.key,
+                  type: 'button',
+                  className: `dshb-ctxItem${action.danger ? ' danger' : ''}`,
+                  onClick: action.run,
+                }, action.label),
+              ),
+            )
+          : null,
+      );
+    }
+
     function RoomView(props) {
       const { t, room, bots, onBack, onPost, onDelete, onRefresh } = props;
       const [draft, setDraft] = React.useState('');
@@ -1330,6 +1461,24 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
         // eslint-disable-next-line react-hooks/exhaustive-deps
       }, [room.id]);
       const thread = threads.find((item) => item.id === activeId) || threads[threads.length - 1];
+      const [threadMenuOpen, setThreadMenuOpen] = React.useState(false);
+      const TAB_LIMIT = 4;
+      const visibleThreads = (() => {
+        if (threads.length <= TAB_LIMIT) return threads;
+        const head = threads.slice(0, TAB_LIMIT - 1);
+        return head.some((item) => item.id === thread.id) ? head : [...head, thread];
+      })();
+      const overflowThreads = threads.filter((item) => !visibleThreads.includes(item));
+      React.useEffect(() => {
+        if (!threadMenuOpen) return undefined;
+        const close = () => setThreadMenuOpen(false);
+        window.addEventListener('mousedown', close);
+        window.addEventListener('keydown', close);
+        return () => {
+          window.removeEventListener('mousedown', close);
+          window.removeEventListener('keydown', close);
+        };
+      }, [threadMenuOpen]);
       const transcript = Array.isArray(thread.transcript) ? thread.transcript : [];
       const transcripts = transcript.length;
 
@@ -1396,6 +1545,24 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
           const data = await props.onThreadDelete(room.id, thread.id);
           const next = ((data && data.rooms) || []).find((item) => item.id === room.id);
           if (next && next.activeThreadId) setActiveId(next.activeThreadId);
+        } catch (failure) {
+          setError(String(failure && failure.message ? failure.message : failure));
+        }
+      };
+
+      const resendEntry = (entry) => {
+        if (!entry || !entry.text) return;
+        stickRef.current = true;
+        onPost(room.id, entry.text, thread.id).catch((failure) => {
+          setError(String(failure && failure.message ? failure.message : failure));
+        });
+      };
+
+      const deleteEntry = async (entry) => {
+        if (!window.confirm(t('msgDeleteConfirm'))) return;
+        setError('');
+        try {
+          await props.onMessageDelete(room.id, thread.id, entry.id);
         } catch (failure) {
           setError(String(failure && failure.message ? failure.message : failure));
         }
@@ -1535,7 +1702,7 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
             h(
               'div',
               { className: 'dshb-threads', role: 'tablist', 'aria-label': t('threadLabel') },
-              threads.map((item) =>
+              visibleThreads.map((item) =>
                 h(
                   'button',
                   {
@@ -1552,6 +1719,46 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
                 ),
               ),
             ),
+            overflowThreads.length > 0
+              ? h(
+                  'div',
+                  { className: 'dshb-threadOverflow' },
+                  h('button', {
+                    type: 'button',
+                    className: 'dshb-threadMoreBtn',
+                    title: t('threadMore'),
+                    'aria-label': t('threadMore'),
+                    'aria-expanded': threadMenuOpen,
+                    onClick: (event) => {
+                      event.stopPropagation();
+                      setThreadMenuOpen((open) => !open);
+                    },
+                  }, `⋯ ${overflowThreads.length}`),
+                  threadMenuOpen
+                    ? h(
+                        'div',
+                        { className: 'dshb-threadMenu', role: 'menu', onMouseDown: (event) => event.stopPropagation() },
+                        threads.map((item) =>
+                          h(
+                            'button',
+                            {
+                              key: item.id,
+                              type: 'button',
+                              role: 'menuitem',
+                              className: `dshb-threadMenuItem${item.id === thread.id ? ' active' : ''}`,
+                              onClick: () => {
+                                setThreadMenuOpen(false);
+                                pickThread(item.id);
+                              },
+                            },
+                            h('span', { className: 'dshb-threadName' }, item.title || t('threadLabel')),
+                            h('span', { className: 'dshb-threadCount' }, String((item.transcript || []).length)),
+                          ),
+                        ),
+                      )
+                    : null,
+                )
+              : null,
             h(
               'div',
               { className: 'dshb-threadTools' },
@@ -1595,7 +1802,14 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
                       h('span', { className: 'dshb-msgWho' }, `${speaker}${hopTag}`),
                       h('span', { className: 'dshb-msgTime' }, timeLabel(entry.at)),
                     ),
-                    h('div', { className: 'dshb-bubble' }, isSystem ? entry.text : h(MarkdownText, { text: entry.text })),
+                    h(MessageBubble, {
+                      t,
+                      entry,
+                      isUser,
+                      isSystem,
+                      onResend: resendEntry,
+                      onDelete: deleteEntry,
+                    }),
                   );
                 }),
           ),
@@ -1858,6 +2072,7 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
       const renameRoomThread = (roomId, threadId, title) => roomThread('roomThreadRename', roomId, { threadId, title });
       const deleteRoomThread = (roomId, threadId) => roomThread('roomThreadDelete', roomId, { threadId });
       const selectRoomThread = (roomId, threadId) => roomThread('roomThreadSelect', roomId, { threadId });
+      const deleteRoomMessage = (roomId, threadId, messageId) => roomThread('roomMessageDelete', roomId, { threadId, messageId });
 
       const refreshRooms = async () => {
         const data = await request();
@@ -1881,6 +2096,7 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
             onThreadRename: renameRoomThread,
             onThreadDelete: deleteRoomThread,
             onThreadSelect: selectRoomThread,
+            onMessageDelete: deleteRoomMessage,
           });
         }
       }

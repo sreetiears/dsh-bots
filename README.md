@@ -111,6 +111,12 @@ files stay on disk. Deleting a room removes its transcript only.
 
 ## Changelog
 
+- **0.8.7** — message actions and conversation overflow.
+  - Each message bubble has copy, resend (user messages only) and delete actions. They show on
+    hover, stay visible on touch screens, and open from right-click.
+  - Resend posts the same text into the current conversation. Delete removes only that message.
+  - When a room has more than 4 conversations, the tab bar shows the first 3 plus the active one,
+    and a "⋯ N" button opens a menu that lists all conversations (replaces horizontal scrolling).
 - **0.8.6** — room header simplified: members on one row, live round status as a pill, and the
   hops/budget/policy/leader settings moved to a quieter line below. Active conversation tab gets an
   underline; the composer hint sits under the input; the send button shows a focus ring.
