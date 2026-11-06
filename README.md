@@ -20,9 +20,11 @@ workspace directory, avatar and persona — and **rooms** to dispatch a message 
 
 - **Sidebar entry** — a `Bots` row in the left column (`sidebar.panellist`), peer to the
   workspace browser, registered through DSH's supported global-panel extension point.
-- **Bots** — durable bot entities:
+- **Bots** — durable bot entities, listed in **groups** (a `group` label on each bot drives the
+  panel sections, e.g. `Code_Eng`, `Daily`, `Core`):
   1. `POST create` makes `<data root>/workspaces/<slug>` on disk,
-  2. registers that directory as a DSH Workspace,
+  2. optionally registers that directory as a DSH Workspace (`registerWorkspace`, off by default so
+     bots do not flood the Workspaces sidebar),
   3. creates an agent session with the chosen agent preset,
   4. writes the persona ("job description") as the session's first message,
   5. records the bot in `<data root>/bots.json`.
@@ -42,15 +44,18 @@ workspace directory, avatar and persona — and **rooms** to dispatch a message 
   - injected into room dispatches and routine prompts;
   - "Let the bot summarize" asks the bot to distill its own conversation into the memory file,
     and the reply is captured back into the file (relay, not a fake).
-- **Routines per bot** — interval-based scheduled instructions ("Routines"):
-  - `name`, `prompt`, `every N minutes`, enable/disable;
+- **Routines per bot** — scheduled instructions ("Routines"):
+  - interval mode (`every N minutes`) or **daily mode** (`at HH:MM`, local time);
+  - `name`, `prompt`, enable/disable;
   - the host checks every 30 s and prompts the bot when a routine is due;
-  - `lastRunAt` is persisted, so restarts do not double-fire immediately.
+  - `lastRunAt` is persisted, so restarts do not double-fire.
 - **All sessions** — sessions that are not registered as bots stay reachable in the same panel.
 - **JSON API** — the same data is reachable from local automation:
   - `GET /dsh-bots/api` → `{ version, bots, rooms, presets, dataRoot }`
   - `POST /dsh-bots/api` → `{ action, ... }` with
-    `create | update | delete | roomCreate | roomUpdate | roomDelete | roomPost`
+    `create | update | delete | botMemoryUpdate | botMemoryDistill | routineAdd | routineUpdate | routineDelete | roomCreate | roomUpdate | roomDelete | roomPost | workspacePrune`
+  - `workspacePrune` removes Workspaces the plugin created for bots that no longer exist
+    (only paths under `<data root>/workspaces`), which keeps the Workspaces sidebar clean.
 
 ## Install
 

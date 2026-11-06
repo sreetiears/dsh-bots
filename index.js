@@ -158,15 +158,38 @@ export function apply(ctx) {
 
   function normalizeRoutine(value, previous) {
     const base = previous || {};
+    const mode = value.mode === 'daily' || base.mode === 'daily' ? 'daily' : 'interval';
+    const at = typeof value.at === 'string' && /^\d{1,2}:\d{2}$/.test(value.at)
+      ? value.at
+      : typeof base.at === 'string' && /^\d{1,2}:\d{2}$/.test(base.at)
+        ? base.at
+        : '06:00';
     return {
       id: typeof base.id === 'string' && base.id.length > 0 ? base.id : `rt-${randomUUID().slice(0, 8)}`,
       name: text(value.name, NAME_LIMIT) || text(base.name, NAME_LIMIT) || '例行任务',
       prompt: text(value.prompt, TEXT_LIMIT) || text(base.prompt, TEXT_LIMIT),
+      mode,
+      at,
       minutes: clampInt(value.minutes, base.minutes === undefined ? 60 : base.minutes, ROUTINE_MIN_MINUTES, ROUTINE_MAX_MINUTES),
       enabled: value.enabled === undefined ? base.enabled !== false : value.enabled !== false,
       lastRunAt: base.lastRunAt === undefined ? 0 : base.lastRunAt,
       createdAt: base.createdAt === undefined ? Date.now() : base.createdAt,
     };
+  }
+
+  function routineDue(routine, now) {
+    if (routine.enabled === false) return false;
+    const last = Number(routine.lastRunAt) || 0;
+    if (routine.mode === 'daily') {
+      const match = /^(\d{1,2}):(\d{2})$/.exec(routine.at || '06:00');
+      if (match === null) return false;
+      const target = new Date(now);
+      target.setHours(Number(match[1]), Number(match[2]), 0, 0);
+      const dueAt = target.getTime();
+      return now >= dueAt && last < dueAt;
+    }
+    const minutes = clampInt(routine.minutes, 60, ROUTINE_MIN_MINUTES, ROUTINE_MAX_MINUTES);
+    return now - last >= minutes * 60 * 1000;
   }
 
   async function loadState() {
@@ -180,6 +203,8 @@ export function apply(ctx) {
     const rooms = Array.isArray(parsed?.rooms) ? parsed.rooms : [];
     const hydrated = await Promise.all(bots.map(async (bot) => ({
       ...bot,
+      group: typeof bot.group === 'string' ? bot.group : '',
+      registerWorkspace: bot.registerWorkspace !== false,
       memory: await readMemory(bot.id),
       memoryAt: bot.memoryAt || 0,
       routines: (Array.isArray(bot.routines) ? bot.routines : []).map((routine) => normalizeRoutine(routine)),
@@ -210,6 +235,8 @@ export function apply(ctx) {
         workspaceId: bot.workspaceId,
         cwd: bot.cwd,
         presetId: bot.presetId,
+        group: bot.group || '',
+        registerWorkspace: bot.registerWorkspace !== false,
         createdAt: bot.createdAt,
         updatedAt: bot.updatedAt,
         memoryAt: bot.memoryAt || 0,
@@ -232,6 +259,8 @@ export function apply(ctx) {
       presetId: bot.presetId,
       createdAt: bot.createdAt,
       updatedAt: bot.updatedAt,
+      group: bot.group || '',
+      registerWorkspace: bot.registerWorkspace !== false,
       memory: bot.memory || '',
       memoryAt: bot.memoryAt || 0,
       routines: bot.routines || [],
@@ -320,7 +349,9 @@ export function apply(ctx) {
     const dir = path.join(workspacesRoot, `${slugify(name)}-${id.slice(4, 8)}`);
     await mkdir(dir, { recursive: true });
 
-    const workspace = await ensureWorkspace(dir, name);
+    const group = text(body.group, 40);
+    const registerWorkspace = body.registerWorkspace !== false;
+    const workspace = registerWorkspace ? await ensureWorkspace(dir, name) : undefined;
     const created = await ctx.sessionController.create({
       cwd: dir,
       ...(presetId.length === 0 ? {} : { agentPreset: presetId }),
@@ -355,6 +386,8 @@ export function apply(ctx) {
       workspaceId: workspace?.id,
       cwd: dir,
       presetId,
+      group,
+      registerWorkspace,
       createdAt: now,
       updatedAt: now,
       memory: '',
@@ -375,6 +408,7 @@ export function apply(ctx) {
       name: text(body.name, NAME_LIMIT) || bot.name,
       emoji: text(body.emoji, 8) || bot.emoji,
       persona: text(body.persona, PERSONA_LIMIT),
+      group: body.group === undefined ? bot.group : text(body.group, 40),
       updatedAt: Date.now(),
     };
     state.bots[index] = next;
@@ -438,6 +472,41 @@ export function apply(ctx) {
     return bot;
   }
 
+  async function workspacePrune(state) {
+    const owned = new Set(
+      state.bots
+        .map((bot) => (typeof bot.cwd === 'string' ? path.resolve(bot.cwd) : ''))
+        .filter((value) => value.length > 0),
+    );
+    const prefix = `${path.resolve(workspacesRoot)}${path.sep}`;
+    let workspaces = [];
+    try {
+      workspaces = await ctx.workspaceRegistry.list();
+    } catch (error) {
+      throw new Error(`workspace listing failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    const removed = [];
+    const failed = [];
+    for (const workspace of workspaces) {
+      const workspacePath = typeof workspace.path === 'string'
+        ? workspace.path
+        : typeof workspace.directory === 'string'
+          ? workspace.directory
+          : '';
+      if (workspacePath.length === 0) continue;
+      const resolved = path.resolve(workspacePath);
+      if (!resolved.startsWith(prefix)) continue;
+      if (owned.has(resolved)) continue;
+      try {
+        await ctx.workspaceRegistry.delete(workspace.id);
+        removed.push({ id: workspace.id, path: resolved });
+      } catch (error) {
+        failed.push({ id: workspace.id, path: resolved, error: error instanceof Error ? error.message : String(error) });
+      }
+    }
+    return { scanned: workspaces.length, removed, failed };
+  }
+
   /* ---------------------------------------------------------------- routines */
 
   async function routineAdd(body, state) {
@@ -447,6 +516,8 @@ export function apply(ctx) {
       name: body.name,
       prompt: body.prompt,
       minutes: body.minutes,
+      mode: body.mode,
+      at: body.at,
       enabled: body.enabled,
     });
     if (routine.prompt.length === 0) throw new Error('routine prompt is required');
@@ -465,6 +536,8 @@ export function apply(ctx) {
       name: body.name === undefined ? previous.name : body.name,
       prompt: body.prompt === undefined ? previous.prompt : body.prompt,
       minutes: body.minutes === undefined ? previous.minutes : body.minutes,
+      mode: body.mode === undefined ? previous.mode : body.mode,
+      at: body.at === undefined ? previous.at : body.at,
       enabled: body.enabled === undefined ? previous.enabled : body.enabled,
     }, previous);
     await saveState(state);
@@ -498,10 +571,7 @@ export function apply(ctx) {
     let changed = false;
     for (const bot of state.bots) {
       for (const routine of bot.routines || []) {
-        if (routine.enabled === false) continue;
-        const minutes = clampInt(routine.minutes, 60, ROUTINE_MIN_MINUTES, ROUTINE_MAX_MINUTES);
-        const last = Number(routine.lastRunAt) || 0;
-        if (now - last < minutes * 60 * 1000) continue;
+        if (!routineDue(routine, now)) continue;
         routine.lastRunAt = now;
         changed = true;
         try {
@@ -818,6 +888,8 @@ export function apply(ctx) {
         extra = { bot: botView(await routineUpdate(body, state)) };
       } else if (action === 'routineDelete') {
         extra = { bot: botView(await routineDelete(body, state)) };
+      } else if (action === 'workspacePrune') {
+        extra = await workspacePrune(state);
       } else if (action === 'roomCreate') {
         await createRoom(body, state);
       } else if (action === 'roomUpdate') {

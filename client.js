@@ -26,6 +26,15 @@ window.__ModuleLoader__.load({
       formCreate: 'New bot',
       formEdit: 'Edit bot',
       formName: 'Name',
+      formGroup: 'Group',
+      formGroupHint: 'Bots with the same group are listed together in this panel.',
+      formGroupUngrouped: 'Ungrouped',
+      formWorkspace: 'Show in Workspaces sidebar',
+      formWorkspaceHint: 'Off keeps this bot out of the workspace list; it stays reachable from Bots.',
+      routineMode: 'Mode',
+      routineModeInterval: 'Every N minutes',
+      routineModeDaily: 'Daily at',
+      routineAt: 'Time (HH:MM)',
       formEmoji: 'Avatar',
       formPersona: 'Persona (job description)',
       formPersonaHint: 'Seeded as the first message of the bot session. Keep it short: goal, boundary, output.',
@@ -114,6 +123,15 @@ window.__ModuleLoader__.load({
       formCreate: '新建 Bot',
       formEdit: '编辑 Bot',
       formName: '名字',
+      formGroup: '分组',
+      formGroupHint: '同一分组的 Bot 会在这个面板里并排显示。',
+      formGroupUngrouped: '未分组',
+      formWorkspace: '显示在工作区侧栏',
+      formWorkspaceHint: '关闭后该 Bot 不出现在工作区列表，只从 Bots 面板进入。',
+      routineMode: '模式',
+      routineModeInterval: '每 N 分钟',
+      routineModeDaily: '每天定时',
+      routineAt: '时间（HH:MM）',
       formEmoji: '头像',
       formPersona: '岗位说明书',
       formPersonaHint: '会成为该 Bot 会话的第一条消息。写清楚：目标、边界、产出格式。',
@@ -377,6 +395,8 @@ window.__ModuleLoader__.load({
         emoji: editing ? bot.emoji || '🤖' : '🤖',
         persona: editing ? bot.persona || '' : '',
         presetId: editing ? bot.presetId || '' : '',
+        group: editing ? bot.group || '' : '',
+        registerWorkspace: editing ? bot.registerWorkspace !== false : false,
       });
       const [error, setError] = React.useState('');
       const [busy, setBusy] = React.useState(false);
@@ -392,7 +412,14 @@ window.__ModuleLoader__.load({
         setBusy(true);
         setError('');
         try {
-          await onSubmit({ name: form.name.trim(), emoji: form.emoji.trim() || '🤖', persona: form.persona, presetId: form.presetId });
+          await onSubmit({
+            name: form.name.trim(),
+            emoji: form.emoji.trim() || '🤖',
+            persona: form.persona,
+            presetId: form.presetId,
+            group: form.group.trim(),
+            registerWorkspace: form.registerWorkspace,
+          });
         } catch (failure) {
           setError(String(failure && failure.message ? failure.message : failure));
           setBusy(false);
@@ -438,6 +465,26 @@ window.__ModuleLoader__.load({
           ),
           h(
             Field,
+            { id: 'dshb-group', label: t('formGroup'), hint: t('formGroupHint') },
+            h('input', {
+              id: 'dshb-group',
+              className: 'dshb-input',
+              value: form.group,
+              maxLength: 40,
+              list: 'dshb-group-options',
+              onChange: (event) => update('group', event.target.value),
+              placeholder: t('formGroupUngrouped'),
+            }),
+            h(
+              'datalist',
+              { id: 'dshb-group-options' },
+              Array.from(new Set((props.groupOptions || []).filter((value) => value.length > 0))).map((value) =>
+                h('option', { key: value, value }),
+              ),
+            ),
+          ),
+          h(
+            Field,
             { id: 'dshb-persona', label: t('formPersona'), hint: t('formPersonaHint') },
             h('textarea', {
               id: 'dshb-persona',
@@ -464,6 +511,18 @@ window.__ModuleLoader__.load({
               (presets || []).map((preset) => h('option', { key: preset.id, value: preset.id }, preset.name)),
             ),
           ),
+          editing
+            ? null
+            : h(
+                'label',
+                { className: 'dshb-check', style: { marginBottom: '12px' } },
+                h('input', {
+                  type: 'checkbox',
+                  checked: form.registerWorkspace,
+                  onChange: (event) => update('registerWorkspace', event.target.checked),
+                }),
+                h('span', null, t('formWorkspace')),
+              ),
           error.length > 0 ? h('div', { className: 'dshb-error' }, error) : null,
           h(
             'div',
@@ -978,6 +1037,24 @@ window.__ModuleLoader__.load({
         return match([room.name, ...memberNames]);
       });
       const visibleSessions = otherSessions.filter((session) => match([session.title, session.workspace, session.preset]));
+      const groupSections = [];
+      {
+        const index = new Map();
+        for (const bot of visibleBots) {
+          const key = (bot.group || '').trim();
+          if (!index.has(key)) {
+            index.set(key, { key: key.length === 0 ? '__ungrouped' : key, title: key.length === 0 ? t('formGroupUngrouped') : key, bots: [] });
+            groupSections.push(index.get(key));
+          }
+          index.get(key).bots.push(bot);
+        }
+        groupSections.sort((left, right) => {
+          if (left.key === '__ungrouped') return 1;
+          if (right.key === '__ungrouped') return -1;
+          return 0;
+        });
+      }
+      const groupOptions = bots.map((bot) => (bot.group || '').trim()).filter((value) => value.length > 0);
 
       const openSession = (sessionId) => {
         if (typeof props.openSession === 'function' && sessionId) props.openSession(sessionId);
@@ -1201,21 +1278,33 @@ window.__ModuleLoader__.load({
             ),
           ),
           error.length > 0 ? h('div', { className: 'dshb-error' }, `${t('errorLoad')} ${error}`) : null,
-          h(
-            'div',
-            { className: 'dshb-section' },
-            h(
-              'div',
-              { className: 'dshb-sectionHead' },
-              h('h2', { className: 'dshb-sectionTitle' }, `${t('myBots')} · ${visibleBots.length}`),
-              h('span', { className: 'dshb-sectionHint' }, t('myBotsHint')),
-            ),
-            loading
-              ? h('div', { className: 'dshb-note' }, t('loading'))
-              : visibleBots.length === 0
-                ? h('div', { className: 'dshb-empty' }, h('strong', null, t('emptyTitle')), h('div', null, t('emptyBody')))
-                : h('div', { className: 'dshb-grid' }, visibleBots.map(renderBot)),
-          ),
+          loading
+            ? h('div', { className: 'dshb-section' }, h('div', { className: 'dshb-note' }, t('loading')))
+            : visibleBots.length === 0
+              ? h(
+                  'div',
+                  { className: 'dshb-section' },
+                  h(
+                    'div',
+                    { className: 'dshb-sectionHead' },
+                    h('h2', { className: 'dshb-sectionTitle' }, `${t('myBots')} · 0`),
+                    h('span', { className: 'dshb-sectionHint' }, t('myBotsHint')),
+                  ),
+                  h('div', { className: 'dshb-empty' }, h('strong', null, t('emptyTitle')), h('div', null, t('emptyBody'))),
+                )
+              : groupSections.map((section) =>
+                  h(
+                    'div',
+                    { key: section.key, className: 'dshb-section' },
+                    h(
+                      'div',
+                      { className: 'dshb-sectionHead' },
+                      h('h2', { className: 'dshb-sectionTitle' }, `${section.title} · ${section.bots.length}`),
+                      h('span', { className: 'dshb-sectionHint' }, t('myBotsHint')),
+                    ),
+                    h('div', { className: 'dshb-grid' }, section.bots.map(renderBot)),
+                  ),
+                ),
           h(
             'div',
             { className: 'dshb-section' },
@@ -1250,6 +1339,7 @@ window.__ModuleLoader__.load({
               t,
               bot: botDialog.id === undefined ? null : botDialog,
               presets,
+              groupOptions,
               onCancel: () => setBotDialog(null),
               onSubmit: submitBot,
             }),
