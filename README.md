@@ -111,6 +111,10 @@ files stay on disk. Deleting a room removes its transcript only.
 
 ## Changelog
 
+- **0.8.4** — rooms can hold multiple conversations (threads): a tab bar above the transcript to
+  create / switch / rename / delete them, each with its own messages and reply budget. The transcript
+  now opens scrolled to the latest message and follows new ones while you are at the bottom. Existing
+  rooms are migrated automatically (old transcript becomes "会话 1").
 - **0.8.3** — `leader` room policy: only the room leader talks to the user and decides which members
   see each message (`ROUTE: @a, @b`, `ROUTE: ALL`, `ROUTE: NONE`); member replies no longer chain
   on their own. New rooms default to leader mode when a leader is picked; existing rooms can switch

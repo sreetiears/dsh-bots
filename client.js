@@ -108,6 +108,14 @@ window.__ModuleLoader__.load({
       policyAllShort: 'all',
       policyMentionShort: 'mention',
       policyLeaderShort: 'leader',
+      threadLabel: 'Conversations',
+      threadNew: 'New conversation',
+      threadRename: 'Rename conversation',
+      threadDelete: 'Delete conversation',
+      threadCount: 'conversations',
+      threadRenamePrompt: 'Conversation name',
+      threadDeleteConfirm: 'Delete this conversation and its messages?',
+      threadLastOnly: 'Keep at least one conversation per room.',
       empty: 'Nothing here',
     };
     const ZH = {
@@ -211,6 +219,14 @@ window.__ModuleLoader__.load({
       policyAllShort: '全员',
       policyMentionShort: '@点名',
       policyLeaderShort: 'Leader',
+      threadLabel: '会话',
+      threadNew: '新会话',
+      threadRename: '重命名会话',
+      threadDelete: '删除会话',
+      threadCount: '条会话',
+      threadRenamePrompt: '会话名称',
+      threadDeleteConfirm: '删除这条会话和里面的消息？',
+      threadLastOnly: '每个房间至少要保留一条会话。',
       empty: '空空如也',
     };
     const DICT = { en: EN, de: EN, es: EN, fr: EN, ja: EN, pt: EN, ru: EN, zh: ZH };
@@ -356,6 +372,16 @@ window.__ModuleLoader__.load({
 .dshb-roomHead{flex-wrap:wrap;gap:10px;margin-bottom:4px;align-items:center}
 .dshb-roomTitle{font-size:22px;font-weight:600;letter-spacing:-.01em}
 .dshb-roomMeta{gap:6px;margin-top:6px}
+.dshb-threadBar{display:flex;align-items:center;gap:8px;margin-top:16px;padding:5px;border:1px solid var(--dsw-alias-border-l1);border-radius:12px;background:var(--dsw-alias-bg-layer-1);min-width:0}
+.dshb-threads{display:flex;align-items:center;gap:4px;flex:1 1 auto;min-width:0;overflow-x:auto;scrollbar-width:thin}
+.dshb-threads::-webkit-scrollbar{height:6px}
+.dshb-threads::-webkit-scrollbar-thumb{border-radius:999px;background:var(--dsw-alias-border-l2)}
+.dshb-threadTab{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;height:30px;max-width:210px;padding:0 11px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--dsw-alias-label-secondary);font-family:inherit;font-size:12px;cursor:pointer}
+.dshb-threadTab:hover{background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary)}
+.dshb-threadTab.active{background:var(--dsw-alias-bg-base);border-color:var(--dsw-alias-border-l1);color:var(--dsw-alias-label-primary);font-weight:500}
+.dshb-threadName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dshb-threadCount{flex:0 0 auto;min-width:16px;padding:1px 5px;border-radius:999px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);font-size:10px;line-height:14px;text-align:center}
+.dshb-threadTools{display:flex;align-items:center;gap:2px;flex:0 0 auto}
 .dshb-chip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:999px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);font-size:12px;color:var(--dsw-alias-label-secondary);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .dshb-chip.live{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l2)}
 .dshb-transcript{padding:18px;border-radius:16px;gap:16px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l1);margin-top:18px;min-height:220px}
@@ -1228,7 +1254,81 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
       const [error, setError] = React.useState('');
       const members = (bots || []).filter((bot) => room.memberIds.includes(bot.id));
       const names = new Map((bots || []).map((bot) => [bot.id, bot]));
-      const transcripts = room.transcript.length;
+      const threads = Array.isArray(room.threads) && room.threads.length > 0
+        ? room.threads
+        : [{ id: room.activeThreadId || 'thread-1', title: t('threadLabel'), transcript: room.transcript || [] }];
+      const [activeId, setActiveId] = React.useState(room.activeThreadId || threads[threads.length - 1].id);
+      React.useEffect(() => {
+        setActiveId(room.activeThreadId || threads[threads.length - 1].id);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [room.id]);
+      const thread = threads.find((item) => item.id === activeId) || threads[threads.length - 1];
+      const transcript = Array.isArray(thread.transcript) ? thread.transcript : [];
+      const transcripts = transcript.length;
+
+      const scrollRef = React.useRef(null);
+      const stickRef = React.useRef(true);
+      const scrollToEnd = () => {
+        const element = scrollRef.current;
+        if (element !== null) element.scrollTop = element.scrollHeight;
+      };
+
+      React.useEffect(() => {
+        stickRef.current = true;
+        scrollToEnd();
+      }, [room.id, thread.id]);
+
+      React.useEffect(() => {
+        if (!stickRef.current) return;
+        scrollToEnd();
+      }, [transcripts, waiting]);
+
+      const pickThread = (threadId) => {
+        if (threadId === thread.id) return;
+        setActiveId(threadId);
+        setWaiting(false);
+        if (typeof props.onThreadSelect === 'function') props.onThreadSelect(room.id, threadId).catch(() => {});
+      };
+
+      const createThread = async () => {
+        if (typeof props.onThreadCreate !== 'function') return;
+        setError('');
+        try {
+          const data = await props.onThreadCreate(room.id);
+          const next = ((data && data.rooms) || []).find((item) => item.id === room.id);
+          if (next && next.activeThreadId) setActiveId(next.activeThreadId);
+        } catch (failure) {
+          setError(String(failure && failure.message ? failure.message : failure));
+        }
+      };
+
+      const renameThread = async () => {
+        if (typeof props.onThreadRename !== 'function') return;
+        const next = window.prompt(t('threadRenamePrompt'), thread.title || '');
+        if (next === null) return;
+        setError('');
+        try {
+          await props.onThreadRename(room.id, thread.id, next);
+        } catch (failure) {
+          setError(String(failure && failure.message ? failure.message : failure));
+        }
+      };
+
+      const removeThread = async () => {
+        if (threads.length <= 1) {
+          setError(t('threadLastOnly'));
+          return;
+        }
+        if (!window.confirm(t('threadDeleteConfirm'))) return;
+        setError('');
+        try {
+          const data = await props.onThreadDelete(room.id, thread.id);
+          const next = ((data && data.rooms) || []).find((item) => item.id === room.id);
+          if (next && next.activeThreadId) setActiveId(next.activeThreadId);
+        } catch (failure) {
+          setError(String(failure && failure.message ? failure.message : failure));
+        }
+      };
 
       React.useEffect(() => {
         if (typeof onRefresh !== 'function') return undefined;
@@ -1246,9 +1346,9 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
 
       React.useEffect(() => {
         if (!waiting) return;
-        const last = room.transcript[room.transcript.length - 1];
+        const last = transcript[transcript.length - 1];
         if (last !== undefined && last.from !== 'user' && last.from !== 'system') setWaiting(false);
-      }, [transcripts, waiting, room.transcript]);
+      }, [transcripts, waiting, transcript]);
 
       const textareaRef = React.useRef(null);
       const [mention, setMention] = React.useState(null);
@@ -1304,8 +1404,9 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
         if (value.length === 0 || busy) return;
         setBusy(true);
         setError('');
+        stickRef.current = true;
         try {
-          await onPost(room.id, value);
+          await onPost(room.id, value, thread.id);
           setDraft('');
           setWaiting(true);
         } catch (failure) {
@@ -1314,7 +1415,7 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
           setBusy(false);
         }
       };
-      const lastUpdated = room.transcript.length > 0 ? room.transcript[room.transcript.length - 1].at : room.updatedAt;
+      const lastUpdated = transcript.length > 0 ? transcript[transcript.length - 1].at : room.updatedAt;
       return h(
         'div',
         { className: 'dshb-page', style: { colorScheme: darkTheme() ? 'dark' : 'light' } },
@@ -1341,6 +1442,7 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
               ? h('span', { className: 'dshb-chip' }, t('roomNoMembers'))
               : members.map((bot) => h('span', { key: bot.id, className: 'dshb-chip' }, `${bot.emoji || '🤖'} ${bot.name}`)),
             h('span', { className: 'dshb-chip' }, `${members.length} ${t('memberCount')}`),
+            h('span', { className: 'dshb-chip' }, `${threads.length} ${t('threadCount')}`),
             h('span', { className: 'dshb-chip' }, policyShort(t, room.policy)),
             room.leaderId !== undefined && room.leaderId !== ''
               ? h('span', { className: 'dshb-chip' }, `👑 ${(bots || []).find((bot) => bot.id === room.leaderId)?.name || room.leaderId}`)
@@ -1353,10 +1455,55 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
           ),
           h(
             'div',
-            { className: 'dshb-transcript' },
-            room.transcript.length === 0
+            { className: 'dshb-threadBar' },
+            h(
+              'div',
+              { className: 'dshb-threads', role: 'tablist', 'aria-label': t('threadLabel') },
+              threads.map((item) =>
+                h(
+                  'button',
+                  {
+                    key: item.id,
+                    type: 'button',
+                    role: 'tab',
+                    'aria-selected': item.id === thread.id,
+                    className: `dshb-threadTab${item.id === thread.id ? ' active' : ''}`,
+                    title: item.title,
+                    onClick: () => pickThread(item.id),
+                  },
+                  h('span', { className: 'dshb-threadName' }, item.title || t('threadLabel')),
+                  h('span', { className: 'dshb-threadCount' }, String((item.transcript || []).length)),
+                ),
+              ),
+            ),
+            h(
+              'div',
+              { className: 'dshb-threadTools' },
+              h('button', { type: 'button', className: 'dshb-iconBtn', title: t('threadNew'), 'aria-label': t('threadNew'), onClick: createThread }, icon('plus', 14)),
+              h('button', { type: 'button', className: 'dshb-iconBtn', title: t('threadRename'), 'aria-label': t('threadRename'), onClick: renameThread }, icon('edit', 14)),
+              h('button', {
+                type: 'button',
+                className: 'dshb-iconBtn',
+                title: t('threadDelete'),
+                'aria-label': t('threadDelete'),
+                disabled: threads.length <= 1,
+                onClick: removeThread,
+              }, icon('trash', 14)),
+            ),
+          ),
+          h(
+            'div',
+            {
+              className: 'dshb-transcript',
+              ref: scrollRef,
+              onScroll: (event) => {
+                const element = event.currentTarget;
+                stickRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
+              },
+            },
+            transcript.length === 0
               ? h('div', { className: 'dshb-empty', style: { border: 'none', background: 'transparent' } }, t('roomEmptyTranscript'))
-              : room.transcript.map((entry) => {
+              : transcript.map((entry) => {
                   const isUser = entry.from === 'user';
                   const isSystem = entry.from === 'system';
                   const speaker = isUser ? t('fromUser') : isSystem ? t('fromSystem') : (names.get(entry.from) || {}).name || entry.from;
@@ -1612,11 +1759,21 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
         }
       };
 
-      const postToRoom = async (roomId, text) => {
-        const data = await request({ action: 'roomPost', roomId, text });
+      const postToRoom = async (roomId, text, threadId) => {
+        const data = await request({ action: 'roomPost', roomId, threadId, text });
         absorb(data);
         if (data.failures && data.failures.length > 0) setError(data.failures.join('; '));
       };
+
+      const roomThread = async (action, roomId, payload) => {
+        const data = await request({ action, roomId, ...payload });
+        absorb(data);
+        return data;
+      };
+      const createRoomThread = (roomId) => roomThread('roomThreadCreate', roomId, {});
+      const renameRoomThread = (roomId, threadId, title) => roomThread('roomThreadRename', roomId, { threadId, title });
+      const deleteRoomThread = (roomId, threadId) => roomThread('roomThreadDelete', roomId, { threadId });
+      const selectRoomThread = (roomId, threadId) => roomThread('roomThreadSelect', roomId, { threadId });
 
       const refreshRooms = async () => {
         const data = await request();
@@ -1636,6 +1793,10 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
             onPost: postToRoom,
             onDelete: removeRoom,
             onRefresh: refreshRooms,
+            onThreadCreate: createRoomThread,
+            onThreadRename: renameRoomThread,
+            onThreadDelete: deleteRoomThread,
+            onThreadSelect: selectRoomThread,
           });
         }
       }
@@ -1717,6 +1878,9 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
                 ),
               ),
               h('span', { className: 'dshb-badge' }, `${members.length} ${t('memberCount')}`),
+              room.threads !== undefined && room.threads.length > 1
+                ? h('span', { className: 'dshb-badge' }, `${room.threads.length} ${t('threadCount')}`)
+                : null,
               h('span', { className: 'dshb-badge' }, policyShort(t, room.policy)),
               room.leaderId !== undefined && room.leaderId !== ''
                 ? h('span', { className: 'dshb-badge' }, '👑')

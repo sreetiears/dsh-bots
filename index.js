@@ -30,6 +30,7 @@ const PERSONA_LIMIT = 6000;
 const TEXT_LIMIT = 8000;
 const MEMORY_LIMIT = 20000;
 const TRANSCRIPT_LIMIT = 400;
+const THREAD_LIMIT = 20;
 const ROOM_CONTEXT_LIMIT = 12;
 const REPLY_LIMIT = 2000;
 const PENDING_TTL_MS = 10 * 60 * 1000;
@@ -192,6 +193,59 @@ export function apply(ctx) {
     return now - last >= minutes * 60 * 1000;
   }
 
+  function makeThread(title, transcript) {
+    const now = Date.now();
+    const kept = Array.isArray(transcript) ? transcript.slice(-TRANSCRIPT_LIMIT) : [];
+    const last = kept.length > 0 ? kept[kept.length - 1] : undefined;
+    return {
+      id: `thr-${randomUUID().slice(0, 8)}`,
+      title: text(title, 60) || '会话 1',
+      createdAt: now,
+      updatedAt: last !== undefined ? Number(last.at) || now : now,
+      transcript: kept,
+    };
+  }
+
+  function normalizeThreads(room) {
+    const raw = Array.isArray(room.threads) ? room.threads : [];
+    const threads = raw
+      .filter((thread) => thread !== null && typeof thread === 'object')
+      .map((thread, index) => {
+        const transcript = Array.isArray(thread.transcript) ? thread.transcript.slice(-TRANSCRIPT_LIMIT) : [];
+        const last = transcript.length > 0 ? transcript[transcript.length - 1] : undefined;
+        return {
+          id: typeof thread.id === 'string' && thread.id.length > 0 ? thread.id : `thr-${randomUUID().slice(0, 8)}`,
+          title: text(thread.title, 60) || `会话 ${index + 1}`,
+          createdAt: Number(thread.createdAt) || (last !== undefined ? Number(last.at) || 0 : 0) || Date.now(),
+          updatedAt: Number(thread.updatedAt) || (last !== undefined ? Number(last.at) || 0 : 0) || Date.now(),
+          transcript,
+        };
+      })
+      .slice(-THREAD_LIMIT);
+    if (threads.length === 0) threads.push(makeThread('会话 1', room.transcript));
+    const activeThreadId = threads.some((thread) => thread.id === room.activeThreadId)
+      ? room.activeThreadId
+      : threads[threads.length - 1].id;
+    return { threads, activeThreadId };
+  }
+
+  function activeThread(room) {
+    const list = Array.isArray(room.threads) ? room.threads : [];
+    return list.find((thread) => thread.id === room.activeThreadId) ?? list[list.length - 1];
+  }
+
+  function threadById(room, threadId) {
+    if (typeof threadId === 'string' && threadId.length > 0) {
+      const hit = room.threads.find((thread) => thread.id === threadId);
+      if (hit !== undefined) return hit;
+    }
+    return activeThread(room);
+  }
+
+  function liveKey(room, thread) {
+    return `${room.id}#${thread.id}`;
+  }
+
   async function loadState() {
     let parsed = null;
     try {
@@ -214,14 +268,17 @@ export function apply(ctx) {
       bots: hydrated,
       rooms: rooms.map((room) => {
         const memberIds = Array.isArray(room.memberIds) ? room.memberIds : [];
+        const { transcript: legacyTranscript, threads: rawThreads, ...rest } = room;
+        const { threads, activeThreadId } = normalizeThreads({ ...rest, transcript: legacyTranscript, threads: rawThreads });
         return {
-          ...room,
+          ...rest,
           memberIds,
           policy: normalizePolicy(room.policy),
           leaderId: memberIds.includes(room.leaderId) ? room.leaderId : '',
           maxHops: clampInt(room.maxHops, DEFAULT_MAX_HOPS, 0, 5),
           budget: clampInt(room.budget, DEFAULT_BUDGET, 1, 30),
-          transcript: Array.isArray(room.transcript) ? room.transcript : [],
+          threads,
+          activeThreadId,
         };
       }),
     };
@@ -274,7 +331,8 @@ export function apply(ctx) {
   }
 
   function roomView(room) {
-    const live = runtime.get(room.id);
+    const thread = activeThread(room);
+    const live = thread === undefined ? undefined : runtime.get(liveKey(room, thread));
     return {
       id: room.id,
       name: room.name,
@@ -284,7 +342,15 @@ export function apply(ctx) {
       leaderId: room.leaderId || '',
       maxHops: room.maxHops,
       budget: room.budget,
-      transcript: room.transcript,
+      transcript: thread === undefined ? [] : thread.transcript,
+      threads: (room.threads || []).map((item) => ({
+        id: item.id,
+        title: item.title,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+        transcript: item.transcript,
+      })),
+      activeThreadId: thread === undefined ? '' : thread.id,
       createdAt: room.createdAt,
       updatedAt: room.updatedAt,
       live: live === undefined ? null : { hop: live.hop, used: live.used },
@@ -627,11 +693,14 @@ export function apply(ctx) {
     return state.bots.some((bot) => bot.id === value) ? value : '';
   }
 
-  function pushTranscript(room, entry) {
-    room.transcript.push({ id: `msg-${randomUUID().slice(0, 8)}`, at: Date.now(), ...entry });
-    if (room.transcript.length > TRANSCRIPT_LIMIT) {
-      room.transcript.splice(0, room.transcript.length - TRANSCRIPT_LIMIT);
+  function pushTranscript(room, entry, threadId) {
+    const thread = threadById(room, threadId);
+    if (thread === undefined) return;
+    thread.transcript.push({ id: `msg-${randomUUID().slice(0, 8)}`, at: Date.now(), ...entry });
+    if (thread.transcript.length > TRANSCRIPT_LIMIT) {
+      thread.transcript.splice(0, thread.transcript.length - TRANSCRIPT_LIMIT);
     }
+    thread.updatedAt = Date.now();
     room.updatedAt = Date.now();
   }
 
@@ -644,6 +713,7 @@ export function apply(ctx) {
       ? (leaderId.length > 0 ? 'leader' : 'all')
       : normalizePolicy(body.policy);
     if (policy === 'leader' && leaderId.length === 0) leaderId = memberIds[0] || '';
+    const firstThread = makeThread('会话 1');
     const room = {
       id: `room-${randomUUID().slice(0, 8)}`,
       name,
@@ -653,13 +723,69 @@ export function apply(ctx) {
       leaderId,
       maxHops: clampInt(body.maxHops, DEFAULT_MAX_HOPS, 0, 5),
       budget: clampInt(body.budget, DEFAULT_BUDGET, 1, 30),
-      transcript: [],
+      threads: [firstThread],
+      activeThreadId: firstThread.id,
       createdAt: now,
       updatedAt: now,
     };
     state.rooms.push(room);
     await saveState(state);
     return room;
+  }
+
+  async function createThread(body, state) {
+    const room = state.rooms.find((candidate) => candidate.id === body.roomId);
+    if (room === undefined) throw new Error(`room "${String(body.roomId)}" not found`);
+    if (room.threads.length >= THREAD_LIMIT) throw new Error(`每个房间最多 ${THREAD_LIMIT} 条会话，先删掉不用的`);
+    const title = typeof body.title === 'string' && body.title.trim().length > 0
+      ? body.title
+      : `会话 ${room.threads.length + 1}`;
+    const thread = makeThread(title);
+    room.threads.push(thread);
+    room.activeThreadId = thread.id;
+    room.updatedAt = Date.now();
+    await saveState(state);
+    return { room: roomView(room), thread };
+  }
+
+  async function renameThread(body, state) {
+    const room = state.rooms.find((candidate) => candidate.id === body.roomId);
+    if (room === undefined) throw new Error(`room "${String(body.roomId)}" not found`);
+    const thread = room.threads.find((candidate) => candidate.id === body.threadId);
+    if (thread === undefined) throw new Error(`thread "${String(body.threadId)}" not found`);
+    const title = text(body.title, 60);
+    if (title.length === 0) throw new Error('empty thread title');
+    thread.title = title;
+    thread.updatedAt = Date.now();
+    room.updatedAt = Date.now();
+    await saveState(state);
+    return { room: roomView(room), thread };
+  }
+
+  async function deleteThread(body, state) {
+    const room = state.rooms.find((candidate) => candidate.id === body.roomId);
+    if (room === undefined) throw new Error(`room "${String(body.roomId)}" not found`);
+    if (room.threads.length <= 1) throw new Error('房间至少要保留一条会话');
+    const index = room.threads.findIndex((candidate) => candidate.id === body.threadId);
+    if (index < 0) throw new Error(`thread "${String(body.threadId)}" not found`);
+    const [removed] = room.threads.splice(index, 1);
+    runtime.delete(liveKey(room, removed));
+    if (room.activeThreadId === removed.id) {
+      room.activeThreadId = room.threads[Math.min(index, room.threads.length - 1)].id;
+    }
+    room.updatedAt = Date.now();
+    await saveState(state);
+    return { room: roomView(room), thread: removed };
+  }
+
+  async function selectThread(body, state) {
+    const room = state.rooms.find((candidate) => candidate.id === body.roomId);
+    if (room === undefined) throw new Error(`room "${String(body.roomId)}" not found`);
+    const thread = room.threads.find((candidate) => candidate.id === body.threadId);
+    if (thread === undefined) throw new Error(`thread "${String(body.threadId)}" not found`);
+    room.activeThreadId = thread.id;
+    await saveState(state);
+    return { room: roomView(room), thread };
   }
 
   async function updateRoom(body, state) {
@@ -683,14 +809,15 @@ export function apply(ctx) {
     const index = state.rooms.findIndex((room) => room.id === body.id);
     if (index < 0) throw new Error(`room "${String(body.id)}" not found`);
     const [removed] = state.rooms.splice(index, 1);
-    runtime.delete(removed.id);
+    for (const thread of removed.threads || []) runtime.delete(liveKey(removed, thread));
     await saveState(state);
     return removed;
   }
 
-  function roomContext(room, state) {
+  function roomContext(room, state, thread) {
     const names = new Map(state.bots.map((bot) => [bot.id, bot.name]));
-    const tail = room.transcript.slice(-ROOM_CONTEXT_LIMIT);
+    const transcript = thread !== undefined && Array.isArray(thread.transcript) ? thread.transcript : [];
+    const tail = transcript.slice(-ROOM_CONTEXT_LIMIT);
     const lines = tail.map((entry) => {
       const who = entry.from === 'user' ? '用户' : entry.from === 'system' ? '系统' : names.get(entry.from) || '成员';
       return `- ${who}：${entry.text}`;
@@ -779,7 +906,9 @@ export function apply(ctx) {
   }
 
   async function dispatchRound(room, state, targets, speakerName, hop, options) {
-    const context = roomContext(room, state);
+    const thread = threadById(room, options !== undefined ? options.threadId : undefined);
+    if (thread === undefined) return [];
+    const context = roomContext(room, state, thread);
     const failures = [];
     const role = options !== undefined && options.role === 'leader' ? 'leader' : 'member';
     for (const bot of targets) {
@@ -792,7 +921,14 @@ export function apply(ctx) {
           },
           new AbortController().signal,
         );
-        pending.set(String(bot.sessionId), { kind: 'room', roomId: room.id, hop, role, at: Date.now() });
+        pending.set(String(bot.sessionId), {
+          kind: 'room',
+          roomId: room.id,
+          threadId: thread.id,
+          hop,
+          role,
+          at: Date.now(),
+        });
       } catch (error) {
         const detail = error && typeof error === 'object' && error.details && error.details.reason
           ? `: ${String(error.details.reason)}`
@@ -809,34 +945,36 @@ export function apply(ctx) {
     const userText = text(body.text, TEXT_LIMIT);
     if (userText.length === 0) throw new Error('empty message');
 
-    pushTranscript(room, { from: 'user', name: '我', text: userText });
-    runtime.set(room.id, { hop: 0, used: 0 });
+    const thread = threadById(room, body.threadId);
+    room.activeThreadId = thread.id;
+    pushTranscript(room, { from: 'user', name: '我', text: userText }, thread.id);
+    runtime.set(liveKey(room, thread), { hop: 0, used: 0 });
     const plan = targetsFor(room, state, userText);
     const failures = await dispatchRound(room, state, plan.targets, undefined, 0, plan.mode === 'leader'
-      ? { role: 'leader', userText }
-      : undefined);
+      ? { role: 'leader', userText, threadId: thread.id }
+      : { threadId: thread.id });
     if (plan.mode === 'leader') {
       if (plan.targets.length === 0) {
-        pushTranscript(room, { from: 'system', name: 'system', text: '这个房间还没有设置 Leader，先在编辑里选一个' });
+        pushTranscript(room, { from: 'system', name: 'system', text: '这个房间还没有设置 Leader，先在编辑里选一个' }, thread.id);
       } else {
         const leader = plan.targets[0];
         pushTranscript(room, {
           from: 'system',
           name: 'system',
           text: `已交给 Leader「${leader.emoji} ${leader.name}」，由它决定这条消息给谁看${failures.length > 0 ? `（派发失败：${failures.map((f) => f.split(':')[0]).join('、')}）` : ''}`,
-        });
+        }, thread.id);
       }
     } else if (plan.targets.length > 0) {
       pushTranscript(room, {
         from: 'system',
         name: 'system',
         text: `${plan.broadcast ? '未指定成员，已派发给全员：' : '已派发给 '}${plan.targets.map((bot) => bot.name).join('、')}${failures.length > 0 ? `（${failures.length} 个失败）` : ''}`,
-      });
+      }, thread.id);
     } else {
-      pushTranscript(room, { from: 'system', name: 'system', text: '房间还没有成员，先在编辑里加入 Bot' });
+      pushTranscript(room, { from: 'system', name: 'system', text: '房间还没有成员，先在编辑里加入 Bot' }, thread.id);
     }
     await saveState(state);
-    return { room, dispatched: plan.targets.length - failures.length, failures };
+    return { room, threadId: thread.id, dispatched: plan.targets.length - failures.length, failures };
   }
 
   /* ------------------------------------------------------------- reply relay */
@@ -882,27 +1020,28 @@ export function apply(ctx) {
 
   async function handleLeaderReply(entry, room, bot, replyText) {
     const state = cachedState;
-    const live = runtime.get(room.id) ?? { hop: 0, used: 0 };
+    const thread = threadById(room, entry.threadId);
+    const live = runtime.get(liveKey(room, thread)) ?? { hop: 0, used: 0 };
     const budget = clampInt(room.budget, DEFAULT_BUDGET, 1, 30);
     if (live.used >= budget) {
-      pushTranscript(room, { from: 'system', name: 'system', text: `本轮已达回复上限（${budget}）` });
+      pushTranscript(room, { from: 'system', name: 'system', text: `本轮已达回复上限（${budget}）` }, thread.id);
       await saveState(state);
       return;
     }
     const { text, spec } = splitRouting(replyText);
     live.used += 1;
     live.hop = 0;
-    runtime.set(room.id, live);
-    pushTranscript(room, { from: bot.id, name: bot.name, text: (text.length > 0 ? text : replyText).slice(0, REPLY_LIMIT), hop: 0, role: 'leader' });
+    runtime.set(liveKey(room, thread), live);
+    pushTranscript(room, { from: bot.id, name: bot.name, text: (text.length > 0 ? text : replyText).slice(0, REPLY_LIMIT), hop: 0, role: 'leader' }, thread.id);
 
     if (spec === undefined) {
-      pushTranscript(room, { from: 'system', name: 'system', text: `Leader「${bot.name}」没有给出派发指令，本轮只有它回应` });
+      pushTranscript(room, { from: 'system', name: 'system', text: `Leader「${bot.name}」没有给出派发指令，本轮只有它回应` }, thread.id);
       await saveState(state);
       return;
     }
     const route = resolveRouteTargets(spec, room, state, bot.id);
     if (route.targets.length === 0) {
-      pushTranscript(room, { from: 'system', name: 'system', text: `调度：Leader「${bot.name}」决定本轮不打扰其他成员` });
+      pushTranscript(room, { from: 'system', name: 'system', text: `调度：Leader「${bot.name}」决定本轮不打扰其他成员` }, thread.id);
       await saveState(state);
       return;
     }
@@ -910,12 +1049,12 @@ export function apply(ctx) {
       from: 'system',
       name: 'system',
       text: `调度：Leader「${bot.name}」把这条消息交给 ${route.targets.map((target) => target.name).join('、')}`,
-    });
+    }, thread.id);
     live.hop = 1;
-    runtime.set(room.id, live);
-    const failures = await dispatchRound(room, state, route.targets, bot.name, 1, { role: 'member', routed: true });
+    runtime.set(liveKey(room, thread), live);
+    const failures = await dispatchRound(room, state, route.targets, bot.name, 1, { role: 'member', routed: true, threadId: thread.id });
     if (failures.length > 0) {
-      pushTranscript(room, { from: 'system', name: 'system', text: `派发失败：${failures.join('；')}` });
+      pushTranscript(room, { from: 'system', name: 'system', text: `派发失败：${failures.join('；')}` }, thread.id);
     }
     await saveState(state);
   }
@@ -933,21 +1072,23 @@ export function apply(ctx) {
     if (room === undefined) return;
     const bot = state.bots.find((candidate) => String(candidate.sessionId) === sessionId);
     if (bot === undefined || !room.memberIds.includes(bot.id)) return;
+    const thread = threadById(room, entry.threadId);
+    if (thread === undefined) return;
     if (entry.role === 'leader') {
       await handleLeaderReply(entry, room, bot, replyText);
       return;
     }
 
-    const live = runtime.get(room.id) ?? { hop: entry.hop ?? 0, used: 0 };
+    const live = runtime.get(liveKey(room, thread)) ?? { hop: entry.hop ?? 0, used: 0 };
     const budget = clampInt(room.budget, DEFAULT_BUDGET, 1, 30);
     if (live.used >= budget) {
-      pushTranscript(room, { from: 'system', name: 'system', text: `本轮已达回复上限（${budget}），停止自动接续` });
+      pushTranscript(room, { from: 'system', name: 'system', text: `本轮已达回复上限（${budget}），停止自动接续` }, thread.id);
       await saveState(state);
       return;
     }
     live.used += 1;
-    runtime.set(room.id, live);
-    pushTranscript(room, { from: bot.id, name: bot.name, text: replyText.slice(0, REPLY_LIMIT), hop: entry.hop ?? 0 });
+    runtime.set(liveKey(room, thread), live);
+    pushTranscript(room, { from: bot.id, name: bot.name, text: replyText.slice(0, REPLY_LIMIT), hop: entry.hop ?? 0 }, thread.id);
 
     // Leader 模式下由 Leader 决定派发对象，成员回复不再自动接续（否则又变成全员刷屏）。
     if (room.policy === 'leader') {
@@ -961,9 +1102,9 @@ export function apply(ctx) {
       const others = state.bots.filter((candidate) => room.memberIds.includes(candidate.id) && candidate.id !== bot.id);
       if (others.length > 0) {
         live.hop = nextHop;
-        const failures = await dispatchRound(room, state, others, bot.name, nextHop);
+        const failures = await dispatchRound(room, state, others, bot.name, nextHop, { threadId: thread.id });
         if (failures.length > 0) {
-          pushTranscript(room, { from: 'system', name: 'system', text: `接续派发失败：${failures.join('；')}` });
+          pushTranscript(room, { from: 'system', name: 'system', text: `接续派发失败：${failures.join('；')}` }, thread.id);
         }
         await saveState(state);
         return;
@@ -1241,6 +1382,14 @@ export function apply(ctx) {
         await deleteRoom(body, state);
       } else if (action === 'roomPost') {
         extra = await roomPost(body, state);
+      } else if (action === 'roomThreadCreate') {
+        await createThread(body, state);
+      } else if (action === 'roomThreadRename') {
+        await renameThread(body, state);
+      } else if (action === 'roomThreadDelete') {
+        await deleteThread(body, state);
+      } else if (action === 'roomThreadSelect') {
+        await selectThread(body, state);
       } else {
         reply(res, 400, { error: `unknown action "${action}"` });
         return;
