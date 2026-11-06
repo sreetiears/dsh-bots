@@ -1,10 +1,10 @@
 {
   "name": "@local/dsh-bots",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": false,
   "license": "MIT",
   "type": "module",
-  "description": "A Bots panel for DeepSeek Harness: chat-object zone with per-bot workspaces and personas.",
+  "description": "A Bots panel for DeepSeek Harness: bots, rooms and sessions as chat contacts.",
   "keywords": ["deepseek-harness", "dsh", "plugin", "bundle", "bots", "agents"],
   "repository": { "type": "git", "url": "git+https://github.com/sreetiears/dsh-bots.git" },
   "bugs": { "url": "https://github.com/sreetiears/dsh-bots/issues" },
