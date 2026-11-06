@@ -52,6 +52,19 @@ workspace directory, avatar and persona — and **rooms** to dispatch a message 
   - `name`, `prompt`, enable/disable;
   - the host checks every 30 s and prompts the bot when a routine is due;
   - `lastRunAt` is persisted, so restarts do not double-fire.
+- **Bot factory tools** — five host tools registered by the plugin, callable by any agent
+  (including the bots themselves), so a requirement-analysis team can create bots on request:
+
+  | Tool | What it does |
+  |---|---|
+  | `bots_list` | list bots by group (id, preset, memory/routine counts, persona excerpt) and rooms |
+  | `bots_create` | create a bot: `name`, `persona`, optional `emoji` / `group` / `presetId` / `registerWorkspace` |
+  | `bots_memory_write` | write (replace) a bot's long-term memory file |
+  | `bots_routine_add` | add a routine (`daily` at `HH:MM`, or `interval` every N minutes) |
+  | `bots_room_create` | create a room from member names/ids with `policy` / `maxHops` / `budget` |
+
+  This is what makes a *BotStudio* setup possible: `需求访谈员 → 需求分析师 → Bot设计师 → Bot建造者`
+  in a room, where the builder calls `bots_create` / `bots_room_create` itself and reports the ids.
 - **All sessions** — sessions that are not registered as bots stay reachable in the same panel.
 - **JSON API** — the same data is reachable from local automation:
   - `GET /dsh-bots/api` → `{ version, bots, rooms, presets, dataRoot }`
@@ -98,8 +111,8 @@ files stay on disk. Deleting a room removes its transcript only.
 
 ## Roadmap
 
-- **v0.6** — connectors (webhook / IM) and per-bot permissions.
-- **v0.7** — richer routines (daily times), memory search, room policy for auto rounds.
+- **v0.6** — per-bot permission scopes for the factory tools (only builder bots create bots).
+- **v0.7** — memory search across bots, room templates, richer bot market-style import/export.
 
 ## License
 
