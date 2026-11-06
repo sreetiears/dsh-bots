@@ -283,6 +283,148 @@ window.__ModuleLoader__.load({
 @media (width <= 640px){.dshb-search{width:100%}.dshb-tools{width:100%}.dshb-tools .dshb-btn{flex:1}.dshb-fieldGrid{grid-template-columns:1fr}}
 `;
 
+    const POLISH = `
+.dshb-page{padding:calc(var(--dsh-frame-top-clearance, 48px) + 4px) clamp(18px, 3.6vw, 44px) 64px;line-height:1.5}
+.dshb-wrap{max-width:1080px}
+.dshb-head{align-items:center;gap:18px;margin-bottom:26px}
+.dshb-headmain{display:flex;flex-direction:column;gap:8px;min-width:0}
+.dshb-titleRow{display:flex;align-items:center;gap:10px;min-width:0}
+.dshb-title{font-size:24px;font-weight:600;letter-spacing:-.01em}
+.dshb-count{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:22px;margin-left:0;padding:0 8px;border-radius:999px;background:var(--dsw-alias-bg-layer-2);border:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary);font-size:12px;font-weight:500;font-variant-numeric:tabular-nums}
+.dshb-sub{margin-top:0;font-size:13px;line-height:1.55;max-width:660px}
+.dshb-tools{gap:8px}
+.dshb-btn{height:36px;border-radius:10px;padding:0 14px;font-weight:600;letter-spacing:.01em;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:background .15s,border-color .15s,opacity .15s}
+.dshb-btn svg{display:block}
+.dshb-btn.quiet{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);font-weight:500}
+.dshb-btn.quiet:hover{border-color:var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2)}
+.dshb-btn.iconOnly{width:36px;padding:0}
+.dshb-searchWrap{position:relative;display:flex;align-items:center;min-width:0}
+.dshb-searchWrap svg{position:absolute;left:11px;color:var(--dsw-alias-label-secondary);pointer-events:none}
+.dshb-search{height:36px;width:210px;border-radius:10px;padding:0 12px 0 32px;transition:border-color .15s}
+.dshb-section{margin-top:30px}
+.dshb-sectionHead{align-items:center;gap:10px;margin-bottom:14px}
+.dshb-sectionTitle{font-size:13px;font-weight:600;letter-spacing:.02em;color:var(--dsw-alias-label-secondary);text-transform:none}
+.dshb-sectionHint{font-size:12px;line-height:1.5}
+.dshb-grid{gap:14px;grid-template-columns:repeat(auto-fill, minmax(min(270px, 100%), 1fr))}
+.dshb-card{align-items:center;gap:13px;padding:14px;border-radius:14px;transition:border-color .15s,background .15s,box-shadow .18s,transform .18s;box-shadow:0 0 0 0 rgba(0,0,0,0)}
+.dshb-card:hover{border-color:var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);box-shadow:0 8px 20px rgba(0,0,0,.14);transform:translateY(-1px)}
+.dshb-avatar{width:40px;height:40px;border-radius:12px;font-size:20px;background:var(--dsw-alias-bg-layer-2)}
+.dshb-card:hover .dshb-avatar{background:var(--dsw-alias-bg-layer-1)}
+.dshb-avatar.text{width:38px;height:38px;border-radius:50%;font-size:14px}
+.dshb-meta{gap:0}
+.dshb-name{font-size:14px;font-weight:600;letter-spacing:.005em}
+.dshb-line{font-size:12px;margin-top:3px;color:var(--dsw-alias-label-secondary)}
+.dshb-persona{font-size:12px;line-height:1.5;margin-top:4px;color:var(--dsw-alias-label-secondary)}
+.dshb-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.dshb-badge{height:20px;line-height:18px;margin:0;padding:0 8px;border-radius:999px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary);font-size:11px}
+.dshb-time{font-size:11px;margin-top:0;align-self:center;max-width:60px}
+.dshb-rowActions{top:auto;bottom:10px;right:10px;gap:2px;padding:2px;border-radius:9px;background:var(--dsw-alias-bg-overlay);box-shadow:0 2px 8px rgba(0,0,0,.14)}
+.dshb-iconBtn{width:26px;height:26px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:7px;color:var(--dsw-alias-label-secondary)}
+.dshb-iconBtn:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-2)}
+.dshb-stack{display:flex;align-items:center;margin-top:8px}
+.dshb-stack .dshb-stackAvatar{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;background:var(--dsw-alias-bg-layer-2);border:2px solid var(--dsw-alias-bg-layer-1);margin-left:-6px}
+.dshb-stack .dshb-stackAvatar:first-child{margin-left:0}
+.dshb-empty{margin-top:0;padding:30px 18px;border-radius:14px;background:var(--dsw-alias-bg-layer-1);border:1px dashed var(--dsw-alias-border-l2);display:flex;flex-direction:column;align-items:center;gap:6px}
+.dshb-empty strong{font-size:14px;font-weight:600}
+.dshb-emptyIcon{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);margin-bottom:4px}
+.dshb-emptyActions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;justify-content:center}
+.dshb-note{margin-top:34px;padding-top:14px;border-top:1px solid var(--dsw-alias-border-l1);font-size:11px;line-height:1.6}
+.dshb-overlay{background:var(--dsw-alias-bg-mask-2, rgba(0,0,0,.42));backdrop-filter:blur(2px);padding:7vh 16px 24px;align-items:flex-start}
+.dshb-dialog{width:min(600px, 100%);padding:18px;border-radius:16px;border:1px solid var(--dsw-alias-border-l2);box-shadow:0 24px 60px rgba(0,0,0,.32);max-height:86vh;overflow-y:auto}
+.dshb-dialogTitle{font-size:16px;font-weight:600;margin:0 0 14px;letter-spacing:-.005em}
+.dshb-dialogActions{margin:16px -18px -18px;padding:12px 18px;border-top:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1)}
+.dshb-field{margin-bottom:14px}
+.dshb-label{font-size:12px;font-weight:600;margin-bottom:6px;color:var(--dsw-alias-label-secondary)}
+.dshb-input,.dshb-textarea,.dshb-select{min-height:36px;border-radius:10px;padding:8px 11px;transition:border-color .15s}
+.dshb-textarea{min-height:104px}
+.dshb-hint{font-size:11px;line-height:1.55;margin-top:5px}
+.dshb-checks{border-radius:10px;padding:6px;gap:2px;max-height:200px}
+.dshb-check{padding:6px 8px;border-radius:7px;font-size:13px}
+.dshb-check:hover{background:var(--dsw-alias-bg-layer-2)}
+.dshb-roomHead{flex-wrap:wrap;gap:10px;margin-bottom:4px;align-items:center}
+.dshb-roomTitle{font-size:22px;font-weight:600;letter-spacing:-.01em}
+.dshb-roomMeta{gap:6px;margin-top:6px}
+.dshb-chip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:999px;background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);font-size:12px;color:var(--dsw-alias-label-secondary);white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.dshb-chip.live{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l2)}
+.dshb-transcript{padding:18px;border-radius:16px;gap:16px;background:var(--dsw-alias-bg-base);border:1px solid var(--dsw-alias-border-l1);margin-top:18px;min-height:220px}
+.dshb-msg{gap:5px;max-width:min(760px, 94%)}
+.dshb-msgHead{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dsw-alias-label-secondary);min-width:0;max-width:100%}
+.dshb-msgAvatar{width:18px;height:18px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;background:var(--dsw-alias-bg-layer-2);flex:none}
+.dshb-bubble{padding:9px 12px;border-radius:12px;border-top-left-radius:4px;background:var(--dsw-alias-bg-layer-2);font-size:13px;line-height:1.55}
+.dshb-msg.user{max-width:min(680px, 88%)}
+.dshb-msg.user .dshb-bubble{border-radius:12px;border-top-right-radius:4px;border-top-left-radius:12px}
+.dshb-msg.system .dshb-bubble{background:var(--dsw-alias-bg-layer-1);border:1px solid var(--dsw-alias-border-l1);border-radius:999px;padding:3px 10px;font-size:11px}
+.dshb-composerRow{gap:10px;margin-top:14px;align-items:stretch}
+.dshb-composer{
+position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;padding:8px 8px 8px 12px;border-radius:14px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);transition:border-color .15s,box-shadow .15s}
+.dshb-composer:focus-within{border-color:var(--dsw-alias-border-l2);box-shadow:0 0 0 3px var(--dsw-alias-bg-layer-2)}
+.dshb-composer .dshb-textarea{border:none;background:transparent;padding:6px 0;min-height:44px;max-height:180px;border-radius:0;box-shadow:none}
+.dshb-composer .dshb-textarea:focus{border:none;box-shadow:none}
+.dshb-sendBtn{width:36px;height:36px;border-radius:10px;border:none;display:inline-flex;align-items:center;justify-content:center;background:var(--dsw-alias-button-primary-fill, var(--dsw-alias-brand-primary));color:var(--dsw-alias-label-primary-inverted, #fff);cursor:pointer;flex:none}
+.dshb-sendBtn:disabled{opacity:.45;cursor:default}
+.dshb-mention{border-radius:12px;padding:5px;box-shadow:0 14px 32px rgba(0,0,0,.26)}
+.dshb-mentionItem{padding:7px 9px;border-radius:8px;gap:9px}
+.dshb-mentionAvatar{width:22px;height:22px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;background:var(--dsw-alias-bg-layer-2);flex:none}
+.dshb-mentionName{flex:1;min-width:0}
+.dshb-mentionHint{font-size:11px;color:var(--dsw-alias-label-secondary);padding:4px 9px 6px;border-top:1px solid var(--dsw-alias-border-l1);margin-top:3px}
+.dshb-waiting{display:inline-flex;align-items:center;gap:7px;margin-top:12px;font-size:12px;color:var(--dsw-alias-label-secondary)}
+.dshb-waitingDot{width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-brand-primary);animation:dshb-pulse 1.1s ease-in-out infinite}
+@keyframes dshb-pulse{0%,100%{opacity:.25;transform:scale(.85)}50%{opacity:1;transform:scale(1)}}
+.dshb-skeleton{display:grid;grid-template-columns:repeat(auto-fill, minmax(min(270px, 100%), 1fr));gap:14px}
+.dshb-skeletonCard{height:96px;border-radius:14px;border:1px solid var(--dsw-alias-border-l1);background:linear-gradient(90deg, var(--dsw-alias-bg-layer-1) 25%, var(--dsw-alias-bg-layer-2) 37%, var(--dsw-alias-bg-layer-1) 63%);background-size:400% 100%;animation:dshb-shimmer 1.4s ease infinite}
+@keyframes dshb-shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
+.dshb-page ::-webkit-scrollbar{width:10px;height:10px}
+.dshb-page ::-webkit-scrollbar-thumb{border-radius:999px;background:var(--dsw-alias-border-l2);border:3px solid transparent;background-clip:content-box}
+.dshb-page ::-webkit-scrollbar-track{background:transparent}
+@media (width <= 760px){
+  .dshb-head{align-items:flex-start}
+  .dshb-tools{width:100%}
+  .dshb-searchWrap{flex:1}
+  .dshb-search{width:100%}
+  .dshb-grid,.dshb-skeleton{grid-template-columns:1fr}
+  .dshb-rowActions{display:flex;opacity:1}
+  .dshb-rowActions{position:static;background:transparent;box-shadow:none;order:3;margin-left:auto;align-self:center}
+  .dshb-card{flex-wrap:wrap}
+  .dshb-dialog{max-height:92vh}
+}
+@media (prefers-reduced-motion: reduce){.dshb-card,.dshb-avatar{transition:none}}
+`;
+
+    const ICON_PATHS = {
+      search: ['M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14Z', 'M20.5 20.5 16.8 16.8'],
+      plus: ['M12 5v14', 'M5 12h14'],
+      room: ['M4 6.5h16v8.5a3.5 3.5 0 0 1-3.5 3.5h-9A3.5 3.5 0 0 1 4 15V6.5Z', 'M8 10.5h8', 'M8 14h5'],
+      refresh: ['M20 11a8 8 0 1 0-2.35 6.35', 'M20 4.8V11h-6.2'],
+      memory: ['M9 4.5h6a2 2 0 0 1 2 2V20l-5-3.2L7 20V6.5a2 2 0 0 1 2-2Z', 'M10 9h4'],
+      routine: ['M12 7.2v4.9l3.1 1.9', 'M12 3.2a8.8 8.8 0 1 0 8.8 8.8'],
+      edit: ['M4 20h4.2L19.4 8.8a2 2 0 0 0 0-2.8l-1.4-1.4a2 2 0 0 0-2.8 0L4 15.8V20Z', 'M13.6 6.2l4.2 4.2'],
+      trash: ['M4.5 7h15', 'M9.5 7V5.2h5V7', 'M6.8 7l.9 12.2h8.6L17.2 7'],
+      back: ['M14.5 5.5 8 12l6.5 6.5'],
+      send: ['M4.5 12 20 5.2l-6.6 15.4-2.3-6.9-6.6-1.7Z'],
+      close: ['M6 6l12 12', 'M18 6 6 18'],
+      bot: ['M12 8.2V5.2', 'M6.2 8.2h11.6v10.6H6.2z', 'M9.6 12.4h.01', 'M14.4 12.4h.01', 'M9.8 15.6h4.4'],
+      spark: ['M12 4.5 13.6 9l4.5 1.6-4.5 1.6L12 16.7l-1.6-4.5L5.9 10.6 10.4 9 12 4.5Z'],
+    };
+
+    function icon(name, size) {
+      const paths = ICON_PATHS[name] || [];
+      return h(
+        'svg',
+        {
+          viewBox: '0 0 24 24',
+          width: size || 15,
+          height: size || 15,
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.7,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          'aria-hidden': true,
+        },
+        paths.map((d, index) => h('path', { key: index, d })),
+      );
+    }
+
     const AVATAR_COLORS = ['#2f6fed', '#107c41', '#a4262c', '#8a5a00', '#5c2e91', '#0f6cbd', '#c239b3'];
 
     function hashOf(value) {
@@ -965,63 +1107,74 @@ window.__ModuleLoader__.load({
       return h(
         'div',
         { className: 'dshb-page', style: { colorScheme: darkTheme() ? 'dark' : 'light' } },
-        h('style', { dangerouslySetInnerHTML: { __html: CSS } }),
+        h('style', { dangerouslySetInnerHTML: { __html: CSS + POLISH } }),
         h(
           'div',
           { className: 'dshb-wrap' },
           h(
             'div',
             { className: 'dshb-tools' },
-            h('button', { type: 'button', className: 'dshb-btn quiet', onClick: onBack }, t('actionBack')),
-            h('button', { type: 'button', className: 'dshb-btn quiet', onClick: () => onDelete(room) }, t('actionDelete')),
+            h('button', { type: 'button', className: 'dshb-btn quiet iconOnly', title: t('actionBack'), 'aria-label': t('actionBack'), onClick: onBack }, icon('back', 15)),
+            h('button', { type: 'button', className: 'dshb-btn quiet iconOnly', title: t('actionDelete'), 'aria-label': t('actionDelete'), onClick: () => onDelete(room) }, icon('trash', 15)),
           ),
           h(
             'div',
             { className: 'dshb-roomHead' },
             h('h1', { className: 'dshb-roomTitle' }, `${room.emoji || '💬'} ${room.name}`),
-            h('span', { className: 'dshb-count' }, timeLabel(lastUpdated)),
+            h('span', { className: 'dshb-chip' }, timeLabel(lastUpdated)),
           ),
           h(
             'div',
             { className: 'dshb-roomMeta' },
             members.length === 0
-              ? h('span', { className: 'dshb-badge' }, t('roomNoMembers'))
-              : members.map((bot) => h('span', { key: bot.id, className: 'dshb-badge' }, `${bot.emoji || '🤖'} ${bot.name}`)),
-            h('span', { className: 'dshb-badge' }, `${members.length} ${t('memberCount')}`),
-            h('span', { className: 'dshb-badge' }, room.policy === 'mention' ? t('policyMentionShort') : t('policyAllShort')),
-            h('span', { className: 'dshb-badge' }, `${t('roomMaxHops')} ${room.maxHops ?? 0}`),
-            h('span', { className: 'dshb-badge' }, `${t('roomBudget')} ${room.budget ?? 8}`),
+              ? h('span', { className: 'dshb-chip' }, t('roomNoMembers'))
+              : members.map((bot) => h('span', { key: bot.id, className: 'dshb-chip' }, `${bot.emoji || '🤖'} ${bot.name}`)),
+            h('span', { className: 'dshb-chip' }, `${members.length} ${t('memberCount')}`),
+            h('span', { className: 'dshb-chip' }, room.policy === 'mention' ? t('policyMentionShort') : t('policyAllShort')),
+            h('span', { className: 'dshb-chip' }, `${t('roomMaxHops')} ${room.maxHops ?? 0}`),
+            h('span', { className: 'dshb-chip' }, `${t('roomBudget')} ${room.budget ?? 8}`),
             room.live !== null && room.live !== undefined
-              ? h('span', { className: 'dshb-badge' }, `${t('roundLabel')} ${room.live.hop} · ${room.live.used}/${room.budget ?? 8}`)
+              ? h('span', { className: 'dshb-chip live' }, `${t('roundLabel')} ${room.live.hop} · ${room.live.used}/${room.budget ?? 8}`)
               : null,
           ),
           h(
             'div',
             { className: 'dshb-transcript' },
             room.transcript.length === 0
-              ? h('div', { className: 'dshb-empty' }, t('roomEmptyTranscript'))
+              ? h('div', { className: 'dshb-empty', style: { border: 'none', background: 'transparent' } }, t('roomEmptyTranscript'))
               : room.transcript.map((entry) => {
                   const isUser = entry.from === 'user';
                   const isSystem = entry.from === 'system';
                   const speaker = isUser ? t('fromUser') : isSystem ? t('fromSystem') : (names.get(entry.from) || {}).name || entry.from;
-                  const emoji = isSystem ? '' : isUser ? '' : (names.get(entry.from) || {}).emoji || '🤖';
+                  const emoji = isSystem ? '' : isUser ? '🧑' : (names.get(entry.from) || {}).emoji || '🤖';
                   const hopTag = typeof entry.hop === 'number' && entry.hop > 0 ? ` · ${t('roundLabel')} ${entry.hop}` : '';
                   return h(
                     'div',
                     { key: entry.id, className: `dshb-msg${isUser ? ' user' : isSystem ? ' system' : ''}` },
-                    h('span', { className: 'dshb-msgWho' }, `${emoji}${speaker}${hopTag}`),
+                    h(
+                      'div',
+                      { className: 'dshb-msgHead' },
+                      h('span', { className: 'dshb-msgAvatar' }, emoji),
+                      h('span', { className: 'dshb-msgWho' }, `${speaker}${hopTag}`),
+                      h('span', { className: 'dshb-msgTime' }, timeLabel(entry.at)),
+                    ),
                     h('div', { className: 'dshb-bubble' }, entry.text),
                   );
                 }),
           ),
-          waiting ? h('div', { className: 'dshb-waiting' }, t('waitingReplies')) : null,
+          waiting
+            ? h('div', { className: 'dshb-waiting' }, h('span', { className: 'dshb-waitingDot' }), t('waitingReplies'))
+            : null,
           error.length > 0 ? h('div', { className: 'dshb-error' }, error) : null,
           h(
             'div',
             { className: 'dshb-composerRow' },
             h(
               'div',
-              { className: 'dshb-composerWrap' },
+              { className: 'dshb-composer' },
+              h(
+                'div',
+                { className: 'dshb-composerWrap' },
               mention !== null && mentionCandidates.length > 0
                 ? h(
                     'div',
@@ -1038,7 +1191,7 @@ window.__ModuleLoader__.load({
                             insertMention(bot);
                           },
                         },
-                        h('span', { 'aria-hidden': true }, bot.emoji || '🤖'),
+                        h('span', { className: 'dshb-mentionAvatar', 'aria-hidden': true }, bot.emoji || '🤖'),
                         h('span', { className: 'dshb-mentionName' }, bot.name),
                       ),
                     ),
@@ -1083,7 +1236,19 @@ window.__ModuleLoader__.load({
                 onBlur: () => window.setTimeout(() => setMention(null), 120),
               }),
             ),
-            h('button', { type: 'button', className: 'dshb-btn', disabled: busy || draft.trim().length === 0, onClick: send }, t('actionSend')),
+              h(
+                'button',
+                {
+                  type: 'button',
+                  className: 'dshb-sendBtn',
+                  title: t('actionSend'),
+                  'aria-label': t('actionSend'),
+                  disabled: busy || draft.trim().length === 0,
+                  onClick: send,
+                },
+                icon('send', 16),
+              ),
+            ),
           ),
           h('div', { className: 'dshb-note' }, t('roomDispatchNote')),
         ),
@@ -1279,22 +1444,27 @@ window.__ModuleLoader__.load({
           { className: 'dshb-meta' },
           h('span', { className: 'dshb-name' }, bot.name),
           h('span', { className: 'dshb-persona' }, bot.persona && bot.persona.length > 0 ? bot.persona : t('personaEmpty')),
-          h('span', { className: 'dshb-badge' }, bot.presetId ? bot.presetId : t('badgeNoPreset')),
-          bot.memory && bot.memory.trim().length > 0 ? h('span', { className: 'dshb-badge' }, t('badgeMemory')) : null,
-          bot.routines && bot.routines.length > 0 ? h('span', { className: 'dshb-badge' }, `${bot.routines.length} ${t('badgeRoutines')}`) : null,
+          h('span', { className: 'dshb-badges' }, [
+            h('span', { key: 'preset', className: 'dshb-badge' }, bot.presetId ? bot.presetId : t('badgeNoPreset')),
+            bot.memory && bot.memory.trim().length > 0 ? h('span', { key: 'memory', className: 'dshb-badge' }, t('badgeMemory')) : null,
+            bot.routines && bot.routines.length > 0
+              ? h('span', { key: 'routines', className: 'dshb-badge' }, `${bot.routines.length} ${t('badgeRoutines')}`)
+              : null,
+          ]),
         ),
         h(
           'span',
           { className: 'dshb-rowActions' },
-          h('button', { type: 'button', className: 'dshb-iconBtn', onClick: (event) => { event.stopPropagation(); setMemoryBotId(bot.id); } }, t('memory')),
-          h('button', { type: 'button', className: 'dshb-iconBtn', onClick: (event) => { event.stopPropagation(); setRoutineBotId(bot.id); } }, t('routines')),
-          h('button', { type: 'button', className: 'dshb-iconBtn', onClick: (event) => { event.stopPropagation(); setBotDialog({ ...bot }); } }, t('actionEdit')),
-          h('button', { type: 'button', className: 'dshb-iconBtn', onClick: (event) => { event.stopPropagation(); removeBot(bot); } }, t('actionDelete')),
+          h('button', { type: 'button', className: 'dshb-iconBtn', title: t('memory'), 'aria-label': t('memory'), onClick: (event) => { event.stopPropagation(); setMemoryBotId(bot.id); } }, icon('memory', 14)),
+          h('button', { type: 'button', className: 'dshb-iconBtn', title: t('routines'), 'aria-label': t('routines'), onClick: (event) => { event.stopPropagation(); setRoutineBotId(bot.id); } }, icon('routine', 14)),
+          h('button', { type: 'button', className: 'dshb-iconBtn', title: t('actionEdit'), 'aria-label': t('actionEdit'), onClick: (event) => { event.stopPropagation(); setBotDialog({ ...bot }); } }, icon('edit', 14)),
+          h('button', { type: 'button', className: 'dshb-iconBtn', title: t('actionDelete'), 'aria-label': t('actionDelete'), onClick: (event) => { event.stopPropagation(); removeBot(bot); } }, icon('trash', 14)),
         ),
       );
 
       const renderRoom = (room) => {
         const members = room.memberIds.map((id) => (bots.find((bot) => bot.id === id) || {}).name || '').filter((name) => name.length > 0);
+        const memberBots = room.memberIds.map((id) => bots.find((bot) => bot.id === id)).filter((bot) => bot !== undefined);
         const last = room.transcript.length > 0 ? room.transcript[room.transcript.length - 1] : undefined;
         return h(
           'div',
@@ -1318,14 +1488,25 @@ window.__ModuleLoader__.load({
             { className: 'dshb-meta' },
             h('span', { className: 'dshb-name' }, room.name),
             h('span', { className: 'dshb-line' }, last === undefined ? t('roomLastEmpty') : last.text),
-            h('span', { className: 'dshb-badge' }, `${members.length} ${t('memberCount')}`),
-            h('span', { className: 'dshb-badge' }, room.policy === 'mention' ? t('policyMentionShort') : t('policyAllShort')),
+            h(
+              'span',
+              { className: 'dshb-badges', style: { alignItems: 'center' } },
+              h(
+                'span',
+                { className: 'dshb-stack', style: { marginTop: 0, marginRight: 2 } },
+                memberBots.slice(0, 5).map((member) =>
+                  h('span', { key: member.id, className: 'dshb-stackAvatar', title: member.name }, member.emoji || '🤖'),
+                ),
+              ),
+              h('span', { className: 'dshb-badge' }, `${members.length} ${t('memberCount')}`),
+              h('span', { className: 'dshb-badge' }, room.policy === 'mention' ? t('policyMentionShort') : t('policyAllShort')),
+            ),
           ),
           h(
             'span',
             { className: 'dshb-rowActions' },
-            h('button', { type: 'button', className: 'dshb-iconBtn', onClick: (event) => { event.stopPropagation(); setRoomDialog({ ...room }); } }, t('actionEdit')),
-            h('button', { type: 'button', className: 'dshb-iconBtn', onClick: (event) => { event.stopPropagation(); removeRoom(room); } }, t('actionDelete')),
+            h('button', { type: 'button', className: 'dshb-iconBtn', title: t('actionEdit'), 'aria-label': t('actionEdit'), onClick: (event) => { event.stopPropagation(); setRoomDialog({ ...room }); } }, icon('edit', 14)),
+            h('button', { type: 'button', className: 'dshb-iconBtn', title: t('actionDelete'), 'aria-label': t('actionDelete'), onClick: (event) => { event.stopPropagation(); removeRoom(room); } }, icon('trash', 14)),
           ),
         );
       };
@@ -1358,7 +1539,7 @@ window.__ModuleLoader__.load({
       return h(
         'div',
         { className: 'dshb-page', style: { colorScheme: darkTheme() ? 'dark' : 'light' } },
-        h('style', { dangerouslySetInnerHTML: { __html: CSS } }),
+        h('style', { dangerouslySetInnerHTML: { __html: CSS + POLISH } }),
         h(
           'div',
           { className: 'dshb-wrap' },
@@ -1368,28 +1549,52 @@ window.__ModuleLoader__.load({
             h(
               'div',
               { className: 'dshb-headmain' },
-              h('h1', { className: 'dshb-title' }, t('panel'), h('span', { className: 'dshb-count' }, String(total))),
+              h(
+                'div',
+                { className: 'dshb-titleRow' },
+                h('h1', { className: 'dshb-title' }, t('panel')),
+                h('span', { className: 'dshb-count' }, String(total)),
+              ),
               h('div', { className: 'dshb-sub' }, t('subtitle')),
             ),
             h(
               'div',
               { className: 'dshb-tools' },
-              h('input', {
-                className: 'dshb-search',
-                type: 'search',
-                value: query,
-                placeholder: t('search'),
-                'aria-label': t('search'),
-                onChange: (event) => setQuery(event.target.value),
-              }),
-              h('button', { className: 'dshb-btn', type: 'button', onClick: () => setBotDialog({}) }, t('new')),
-              h('button', { className: 'dshb-btn', type: 'button', onClick: () => setRoomDialog({}) }, t('newRoom')),
-              h('button', { className: 'dshb-btn quiet', type: 'button', onClick: () => load() }, t('actionReload')),
+              h(
+                'div',
+                { className: 'dshb-searchWrap' },
+                icon('search', 15),
+                h('input', {
+                  className: 'dshb-search',
+                  type: 'search',
+                  value: query,
+                  placeholder: t('search'),
+                  'aria-label': t('search'),
+                  onChange: (event) => setQuery(event.target.value),
+                }),
+              ),
+              h('button', { className: 'dshb-btn', type: 'button', onClick: () => setBotDialog({}) }, icon('plus', 15), t('new')),
+              h('button', { className: 'dshb-btn quiet', type: 'button', onClick: () => setRoomDialog({}) }, icon('room', 15), t('newRoom')),
+              h(
+                'button',
+                {
+                  className: 'dshb-btn quiet iconOnly',
+                  type: 'button',
+                  title: t('actionReload'),
+                  'aria-label': t('actionReload'),
+                  onClick: () => load(),
+                },
+                icon('refresh', 15),
+              ),
             ),
           ),
           error.length > 0 ? h('div', { className: 'dshb-error' }, `${t('errorLoad')} ${error}`) : null,
           loading
-            ? h('div', { className: 'dshb-section' }, h('div', { className: 'dshb-note' }, t('loading')))
+            ? h(
+                'div',
+                { className: 'dshb-section' },
+                h('div', { className: 'dshb-skeleton' }, [0, 1, 2].map((index) => h('div', { key: index, className: 'dshb-skeletonCard' }))),
+              )
             : visibleBots.length === 0
               ? h(
                   'div',
@@ -1400,7 +1605,18 @@ window.__ModuleLoader__.load({
                     h('h2', { className: 'dshb-sectionTitle' }, `${t('myBots')} · 0`),
                     h('span', { className: 'dshb-sectionHint' }, t('myBotsHint')),
                   ),
-                  h('div', { className: 'dshb-empty' }, h('strong', null, t('emptyTitle')), h('div', null, t('emptyBody'))),
+                  h(
+                    'div',
+                    { className: 'dshb-empty' },
+                    h('span', { className: 'dshb-emptyIcon' }, icon('bot', 20)),
+                    h('strong', null, t('emptyTitle')),
+                    h('div', null, t('emptyBody')),
+                    h(
+                      'div',
+                      { className: 'dshb-emptyActions' },
+                      h('button', { className: 'dshb-btn', type: 'button', onClick: () => setBotDialog({}) }, icon('plus', 15), t('new')),
+                    ),
+                  ),
                 )
               : groupSections.map((section) =>
                   h(
@@ -1425,7 +1641,18 @@ window.__ModuleLoader__.load({
               h('span', { className: 'dshb-sectionHint' }, t('roomsHint')),
             ),
             visibleRooms.length === 0
-              ? h('div', { className: 'dshb-empty' }, h('strong', null, t('roomEmpty')), h('div', null, t('roomEmptyBody')))
+              ? h(
+                  'div',
+                  { className: 'dshb-empty' },
+                  h('span', { className: 'dshb-emptyIcon' }, icon('room', 20)),
+                  h('strong', null, t('roomEmpty')),
+                  h('div', null, t('roomEmptyBody')),
+                  h(
+                    'div',
+                    { className: 'dshb-emptyActions' },
+                    h('button', { className: 'dshb-btn', type: 'button', onClick: () => setRoomDialog({}) }, icon('plus', 15), t('newRoom')),
+                  ),
+                )
               : h('div', { className: 'dshb-grid' }, visibleRooms.map(renderRoom)),
           ),
           visibleSessions.length > 0
