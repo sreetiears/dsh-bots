@@ -111,6 +111,17 @@ files stay on disk. Deleting a room removes its transcript only.
 
 ## Changelog
 
+- **0.9.0** — memory management.
+  - Global memory: `memory/_global.md` is shared by every bot and injected into room, leader,
+    routine and persona prompts next to each bot's own memory.
+  - New Memory manager dialog (toolbar "记忆" / "Memory", and each bot's memory button). It lists
+    the global memory and every bot memory, supports keyword search across all of them, inline
+    editing, and distillation: one bot, all bots, or the global memory through a curator bot.
+  - Optional auto-distill schedule (off by default): while the harness is open, the host runs
+    bot-level distillation on the chosen interval and, when a curator is set, a global pass.
+  - Tools: `bots_memory_write` accepts `botId: "global"`; new `bots_memory_search` greps every
+    memory and returns matching snippets.
+
 - **0.8.7** — message actions and conversation overflow.
   - Each message bubble has copy, resend (user messages only) and delete actions. They show on
     hover, stay visible on touch screens, and open from right-click.

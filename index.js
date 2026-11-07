@@ -39,6 +39,8 @@ const DEFAULT_BUDGET = 8;
 const TIMER_TICK_MS = 30 * 1000;
 const ROUTINE_MIN_MINUTES = 1;
 const ROUTINE_MAX_MINUTES = 7 * 24 * 60;
+const GLOBAL_MEMORY_FILE = '_global.md';
+const MEMORY_SCHEDULE_MAX_HOURS = 7 * 24;
 
 function dataRoot() {
   const explicit = process.env.DSH_BOTS_DIR;
@@ -157,6 +159,29 @@ export function apply(ctx) {
     await writeFile(path.join(memoryRoot, `${botId}.md`), content, 'utf8');
   }
 
+  async function readGlobalMemory() {
+    try {
+      return await readFile(path.join(memoryRoot, GLOBAL_MEMORY_FILE), 'utf8');
+    } catch {
+      return '';
+    }
+  }
+
+  async function writeGlobalMemory(content) {
+    await mkdir(memoryRoot, { recursive: true });
+    await writeFile(path.join(memoryRoot, GLOBAL_MEMORY_FILE), content, 'utf8');
+  }
+
+  function normalizeMemorySchedule(value) {
+    const base = value !== null && typeof value === 'object' ? value : {};
+    return {
+      enabled: base.enabled === true,
+      everyHours: clampInt(base.everyHours, 24, 1, MEMORY_SCHEDULE_MAX_HOURS),
+      lastRunAt: Number(base.lastRunAt) || 0,
+      curatorId: typeof base.curatorId === 'string' ? base.curatorId : '',
+    };
+  }
+
   function normalizeRoutine(value, previous) {
     const base = previous || {};
     const mode = value.mode === 'daily' || base.mode === 'daily' ? 'daily' : 'interval';
@@ -266,6 +291,9 @@ export function apply(ctx) {
     return {
       version: 4,
       bots: hydrated,
+      globalMemory: await readGlobalMemory(),
+      globalMemoryAt: Number(parsed?.globalMemoryAt) || 0,
+      memorySchedule: normalizeMemorySchedule(parsed?.memorySchedule),
       rooms: rooms.map((room) => {
         const memberIds = Array.isArray(room.memberIds) ? room.memberIds : [];
         const { transcript: legacyTranscript, threads: rawThreads, ...rest } = room;
@@ -306,6 +334,8 @@ export function apply(ctx) {
         routines: bot.routines || [],
       })),
       rooms: state.rooms,
+      globalMemoryAt: state.globalMemoryAt || 0,
+      memorySchedule: normalizeMemorySchedule(state.memorySchedule),
     };
     await writeFile(registryPath, `${JSON.stringify(persisted, null, 2)}\n`, 'utf8');
   }
@@ -370,6 +400,9 @@ export function apply(ctx) {
       version: 4,
       bots: state.bots.map(botView),
       rooms: state.rooms.map(roomView),
+      globalMemory: state.globalMemory || '',
+      globalMemoryAt: state.globalMemoryAt || 0,
+      memorySchedule: normalizeMemorySchedule(state.memorySchedule),
       dataRoot: root,
     };
   }
@@ -401,11 +434,13 @@ export function apply(ctx) {
   }
 
   function personaPrompt(bot) {
+    const global = String(cachedState.globalMemory || '').trim();
     return [
       `你是「${bot.name}」，一个长期存在、有固定岗位的 Bot（不是一次性助手）。`,
       '',
       '【岗位说明书】',
       bot.persona,
+      ...(global.length > 0 ? ['', '【全局记忆（所有 Bot 共享）】', global.slice(0, 4000)] : []),
       '',
       '工作方式：先确认目标与边界，再动手；不确定时先问，不要猜。',
       '回答简洁，直接给结论与下一步；需要调用工具时说明你在做什么。',
@@ -545,6 +580,144 @@ export function apply(ctx) {
     return bot;
   }
 
+  function memoryBlock(bot, state) {
+    const source = state !== null && state !== undefined ? state : cachedState;
+    const lines = [];
+    const global = String(source.globalMemory || '').trim();
+    if (global.length > 0) lines.push('【全局记忆（所有 Bot 共享）】', global.slice(0, 4000));
+    const own = String(bot.memory || '').trim();
+    if (own.length > 0) {
+      if (lines.length > 0) lines.push('');
+      lines.push('【本 Bot 长期记忆】', own.slice(0, 4000));
+    }
+    return lines;
+  }
+
+  async function updateGlobalMemory(body, state) {
+    const content = text(body.memory, MEMORY_LIMIT);
+    await writeGlobalMemory(content);
+    state.globalMemory = content;
+    state.globalMemoryAt = Date.now();
+    await saveState(state);
+    return { globalMemory: content, globalMemoryAt: state.globalMemoryAt };
+  }
+
+  function memorySnippet(content, needle) {
+    const lower = content.toLowerCase();
+    const index = lower.indexOf(needle);
+    if (index < 0) return '';
+    const start = Math.max(0, index - 60);
+    const end = Math.min(content.length, index + needle.length + 140);
+    const body = content.slice(start, end).replace(/\s+/g, ' ').trim();
+    return `${start > 0 ? '…' : ''}${body}${end < content.length ? '…' : ''}`;
+  }
+
+  async function searchMemory(body, state) {
+    const needle = String(body.query || '').trim().toLowerCase();
+    if (needle.length === 0) throw new Error('query is required');
+    const results = [];
+    const globalText = String(state.globalMemory || '');
+    const globalHit = memorySnippet(globalText, needle);
+    if (globalHit.length > 0) results.push({ id: 'global', name: '全局记忆', snippet: globalHit, at: state.globalMemoryAt || 0 });
+    for (const bot of state.bots) {
+      const hit = memorySnippet(String(bot.memory || ''), needle);
+      if (hit.length > 0) results.push({ id: bot.id, name: `${bot.emoji || '🤖'} ${bot.name}`, snippet: hit, at: bot.memoryAt || 0 });
+    }
+    return { results };
+  }
+
+  async function distillAll(state) {
+    const dispatched = [];
+    const skipped = [];
+    for (const bot of state.bots) {
+      if (typeof bot.sessionId !== 'string' || bot.sessionId.length === 0) continue;
+      if (pending.has(bot.sessionId)) {
+        skipped.push(bot.name);
+        continue;
+      }
+      try {
+        await distillMemory({ botId: bot.id }, state);
+        dispatched.push(bot.name);
+      } catch (error) {
+        skipped.push(bot.name);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+    return { dispatched, skipped };
+  }
+
+  async function distillGlobal(body, state) {
+    const curator = state.bots.find((candidate) => candidate.id === body.botId) || state.bots[0];
+    if (curator === undefined) throw new Error('no bot available to curate global memory');
+    if (pending.has(curator.sessionId)) throw new Error(`「${curator.name}」正在处理另一条任务，稍后再试`);
+    const current = (state.globalMemory || '').trim();
+    const sections = state.bots
+      .map((bot) => `### ${bot.name}\n${(bot.memory || '').trim().slice(0, 1500) || '（暂无记忆）'}`)
+      .join('\n\n')
+      .slice(0, 12000);
+    const content = [
+      '【全局记忆整理 · 内部维护动作】',
+      '这不是用户在提问，不要反问、不要等待确认、不要寒暄。',
+      '下面是全体 Bot 各自的长期记忆汇总。请从中提炼“跨 Bot 共享、长期有效”的内容，形成团队级全局记忆：',
+      '包括：用户的长期偏好与习惯、团队通用约定（命名/流程/输出格式）、已确定的架构决策、长期进行中的项目与目标。',
+      '不要收录只属于某个 Bot 岗位内部的细节。合并重复，删除过期内容，用结构化 Markdown 条目。',
+      current.length === 0 ? '当前还没有全局记忆。' : `现有全局记忆如下，请在此基础上增补与修正：\n\n${current}`,
+      '',
+      '各 Bot 记忆汇总：',
+      sections,
+      '',
+      '只输出整理后的全局记忆内容本身，不要解释、不要提问、不要代码块包裹。',
+    ].join('\n');
+    try {
+      await ctx.sessionController.prompt(
+        { sessionId: curator.sessionId, requestId: randomUUID(), content: [{ type: 'text', text: content }] },
+        new AbortController().signal,
+      );
+    } catch (error) {
+      throw new Error(`prompt rejected: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    pending.set(String(curator.sessionId), { kind: 'memoryGlobal', botId: curator.id, at: Date.now() });
+    return curator;
+  }
+
+  async function updateMemorySchedule(body, state) {
+    state.memorySchedule = normalizeMemorySchedule({
+      ...state.memorySchedule,
+      enabled: body.enabled,
+      everyHours: body.everyHours,
+      curatorId: body.curatorId === undefined ? state.memorySchedule?.curatorId : body.curatorId,
+    });
+    await saveState(state);
+    return { memorySchedule: state.memorySchedule };
+  }
+
+  async function runDueMemory() {
+    const state = cachedState;
+    const schedule = normalizeMemorySchedule(state.memorySchedule);
+    if (!schedule.enabled) return;
+    const now = Date.now();
+    if (now - schedule.lastRunAt < schedule.everyHours * 60 * 60 * 1000) return;
+    state.memorySchedule = { ...schedule, lastRunAt: now };
+    await saveState(state);
+    for (const bot of state.bots) {
+      if (typeof bot.sessionId !== 'string' || bot.sessionId.length === 0) continue;
+      if (pending.has(bot.sessionId)) continue;
+      try {
+        await distillMemory({ botId: bot.id }, state);
+      } catch {
+        /* skip bot-level failures, keep the schedule running */
+      }
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    if (schedule.curatorId.length > 0) {
+      try {
+        await distillGlobal({ botId: schedule.curatorId }, state);
+      } catch {
+        /* optional global pass */
+      }
+    }
+  }
+
   async function workspacePrune(state) {
     const owned = new Set(
       state.bots
@@ -631,8 +804,9 @@ export function apply(ctx) {
       `指令：${routine.prompt}`,
       `工作目录：${bot.cwd}`,
     ];
-    if ((bot.memory || '').trim().length > 0) {
-      lines.push('', '【长期记忆】', bot.memory.trim().slice(0, 4000));
+    const block = memoryBlock(bot);
+    if (block.length > 0) {
+      lines.push('', ...block);
     }
     lines.push('', '请按指令执行；完成后用一句话说明结果。');
     return lines.join('\n');
@@ -865,14 +1039,14 @@ export function apply(ctx) {
   }
 
   function leaderContent(room, context, bot, userText) {
-    const memory = (bot.memory || '').trim();
     const lines = [
       `【群聊房间：${room.name}】你现在是本房间的 Leader（调度者）：用户只跟你对话，由你决定这条消息给谁看。`,
       '',
       '成员岗位：',
       context.roster,
     ];
-    if (memory.length > 0) lines.push('', '【长期记忆】', memory.slice(0, 4000));
+    const block = memoryBlock(bot);
+    if (block.length > 0) lines.push('', ...block);
     lines.push(
       '',
       '最近消息：',
@@ -901,12 +1075,12 @@ export function apply(ctx) {
       : speakerName === undefined
         ? '请就房间里的话题给出你的回应。'
         : `这是自动接续的第 ${hop} 轮：上一条发言来自「${speakerName}」，请直接回应它的内容（同意/补充/反驳都行）。`;
-    const memory = (bot.memory || '').trim();
+    const block = memoryBlock(bot);
     const lines = [
       `【群聊房间：${room.name}】`,
       `成员：${context.members}`,
     ];
-    if (memory.length > 0) lines.push('', '【长期记忆】', memory.slice(0, 4000));
+    if (block.length > 0) lines.push('', ...block);
     lines.push(
       '',
       '最近消息：',
@@ -1005,6 +1179,19 @@ export function apply(ctx) {
     await saveState(state);
   }
 
+  async function handleMemoryGlobalReply(entry, sessionId, replyText) {
+    const state = cachedState;
+    const bot = state.bots.find((candidate) => String(candidate.sessionId) === sessionId);
+    if (bot === undefined) return;
+    const content = stripFence(replyText).slice(0, MEMORY_LIMIT);
+    if (content.length === 0) return;
+    await writeGlobalMemory(`${content}\n`);
+    state.globalMemory = content;
+    state.globalMemoryAt = Date.now();
+    if (state.memorySchedule !== undefined) state.memorySchedule.curatorId = bot.id;
+    await saveState(state);
+  }
+
   const ROUTE_PATTERN = /^\s*(?:ROUTE|路由|派发(?:给)?)\s*[:：]\s*(.+?)\s*$/imu;
 
   function splitRouting(replyText) {
@@ -1081,6 +1268,10 @@ export function apply(ctx) {
       await handleMemoryReply(entry, sessionId, replyText);
       return;
     }
+    if (entry.kind === 'memoryGlobal') {
+      await handleMemoryGlobalReply(entry, sessionId, replyText);
+      return;
+    }
     const state = cachedState;
     const room = state.rooms.find((candidate) => candidate.id === entry.roomId);
     if (room === undefined) return;
@@ -1154,7 +1345,10 @@ export function apply(ctx) {
 
   const timer = setInterval(() => {
     ready
-      .then(() => runDueRoutines())
+      .then(async () => {
+        await runDueRoutines();
+        await runDueMemory();
+      })
       .catch((error) => ctx.logger?.warn?.(`dsh-bots: routine tick failed: ${String(error)}`));
   }, TIMER_TICK_MS);
   ctx.effect(() => () => clearInterval(timer), 'dsh-bots: routine timer');
@@ -1267,15 +1461,36 @@ export function apply(ctx) {
     })),
     ctx.tools.register(factoryTool({
       name: 'bots_memory_write',
-      description: '写入（覆盖）某个 Bot 的长期记忆文件。记忆会在它参与房间对话、执行例行任务时注入。适合在建好 Bot 后写入初始记忆，或追加整理后的要点（先读旧内容再写全量）。',
+      description: '写入（覆盖）某个 Bot 的长期记忆文件；botId 传 "global" 时写全局记忆（所有 Bot 共享）。记忆会在它参与房间对话、执行例行任务时注入。适合在建好 Bot 后写入初始记忆，或追加整理后的要点（先读旧内容再写全量）。',
       properties: {
-        botId: { type: 'string', required: true, description: 'Bot id（bots_list 返回的 id）' },
+        botId: { type: 'string', required: true, description: 'Bot id（bots_list 返回的 id），或 "global" 表示全局记忆' },
         memory: { type: 'string', required: true, description: '完整记忆内容（Markdown），会覆盖旧内容' },
       },
       execute: async (args) => {
         const state = await ready;
+        const target = String(args.botId || '').trim();
+        if (target === 'global' || target === '_global') {
+          const result = await updateGlobalMemory({ memory: args.memory }, state);
+          return `已更新全局记忆（所有 Bot 共享）：${String(result.globalMemory || '').length} 字符。`;
+        }
         const bot = await updateMemory({ botId: args.botId, memory: args.memory }, state);
         return `已更新 ${bot.emoji} ${bot.name}（id=${bot.id}）的长期记忆：${String(bot.memory || '').length} 字符。`;
+      },
+    })),
+    ctx.tools.register(factoryTool({
+      name: 'bots_memory_search',
+      description: '在所有 Bot 的长期记忆与全局记忆里按关键词搜索，返回命中的记忆片段与所属 Bot。想找人名、决策、偏好、约定时先用它。',
+      properties: {
+        query: { type: 'string', required: true, description: '搜索关键词（不区分大小写）' },
+      },
+      execute: async (args) => {
+        const state = await ready;
+        const { results } = await searchMemory({ query: args.query }, state);
+        if (results.length === 0) return `没有记忆命中「${String(args.query)}」。`;
+        return [
+          `命中 ${results.length} 条记忆：`,
+          ...results.map((item) => `- ${item.name}：${item.snippet}`),
+        ].join('\n');
       },
     })),
     ctx.tools.register(factoryTool({
@@ -1380,6 +1595,16 @@ export function apply(ctx) {
         extra = { bot: botView(await updateMemory(body, state)) };
       } else if (action === 'botMemoryDistill') {
         extra = { bot: botView(await distillMemory(body, state)) };
+      } else if (action === 'memoryGlobalUpdate') {
+        extra = await updateGlobalMemory(body, state);
+      } else if (action === 'memorySearch') {
+        extra = await searchMemory(body, state);
+      } else if (action === 'memoryDistillAll') {
+        extra = await distillAll(state);
+      } else if (action === 'memoryDistillGlobal') {
+        extra = { curator: botView(await distillGlobal(body, state)) };
+      } else if (action === 'memoryScheduleUpdate') {
+        extra = await updateMemorySchedule(body, state);
       } else if (action === 'routineAdd') {
         extra = { bot: botView(await routineAdd(body, state)) };
       } else if (action === 'routineUpdate') {

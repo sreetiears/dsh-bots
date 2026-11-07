@@ -65,6 +65,23 @@ window.__ModuleLoader__.load({
       memoryDistill: 'Let the bot summarize',
       memoryDistilling: 'Asking the bot…',
       memorySavedAt: 'updated',
+      memoryManager: 'Memory',
+      actionClose: 'Close',
+      memoryManagerTitle: 'Memory manager',
+      memoryGlobal: 'Global memory',
+      memoryGlobalHint: 'Saved as memory/_global.md and injected into every room and routine prompt, for all bots.',
+      memoryGlobalEmpty: 'No global memory yet. Distill it from the bots, or write shared facts here.',
+      memorySearchPlaceholder: 'Search all memories…',
+      memorySearchEmpty: 'No memory hits.',
+      memoryDistillAll: 'Distill all bots',
+      memoryDistillingAll: 'Dispatching…',
+      memoryDistillGlobal: 'Distill global memory',
+      memoryCurator: 'Curator bot',
+      memoryAuto: 'Auto-distill memory',
+      memoryAutoHint: 'Runs in the background on this interval while the harness is open.',
+      memoryHours: 'hours',
+      memoryGlobalSavedAt: 'Updated',
+      memorySelectHint: 'Pick a memory on the left.',
       routineTitle: 'Scheduled routines',
       routineHint: 'The host prompts this bot on the interval below; lasts until you disable it.',
       routineName: 'Name',
@@ -182,6 +199,23 @@ window.__ModuleLoader__.load({
       memoryDistill: '让 Bot 自己整理',
       memoryDistilling: '正在让 Bot 整理…',
       memorySavedAt: '更新于',
+      memoryManager: '记忆',
+      actionClose: '关闭',
+      memoryManagerTitle: '记忆管理',
+      memoryGlobal: '全局记忆',
+      memoryGlobalHint: '保存为 memory/_global.md，注入所有 Bot 的房间与例行任务提示。',
+      memoryGlobalEmpty: '还没有全局记忆。可以从各 Bot 记忆里提炼，或直接写团队共享的事实。',
+      memorySearchPlaceholder: '搜索所有记忆…',
+      memorySearchEmpty: '没有命中的记忆。',
+      memoryDistillAll: '整理全部 Bot',
+      memoryDistillingAll: '正在派发…',
+      memoryDistillGlobal: '整理全局记忆',
+      memoryCurator: '整理者',
+      memoryAuto: '自动整理记忆',
+      memoryAutoHint: '在 Harness 打开期间，按下面的周期在后台自动整理。',
+      memoryHours: '小时',
+      memoryGlobalSavedAt: '更新于',
+      memorySelectHint: '在左侧选择一条记忆。',
       routineTitle: '例行任务',
       routineHint: '宿主会按下面的周期给这个 Bot 发指令，直到你停用。',
       routineName: '名称',
@@ -451,6 +485,34 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
 .dshb-waiting{display:inline-flex;align-items:center;gap:7px;margin-top:12px;font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dshb-waitingDot{width:7px;height:7px;border-radius:50%;background:var(--dsw-alias-brand-primary);animation:dshb-pulse 1.1s ease-in-out infinite}
 @keyframes dshb-pulse{0%,100%{opacity:.25;transform:scale(.85)}50%{opacity:1;transform:scale(1)}}
+.dshb-dialogHead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.dshb-dialogWide{width:min(900px, 94vw);max-height:86vh;display:flex;flex-direction:column}
+.dshb-memBody{display:grid;grid-template-columns:250px minmax(0,1fr);gap:16px;min-height:0;flex:1}
+.dshb-memRail{display:flex;flex-direction:column;gap:10px;border-right:1px solid var(--dsw-alias-border-l1);padding-right:12px;overflow-y:auto;max-height:58vh}
+.dshb-memSearchWrap{display:flex;align-items:center;gap:6px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:0 8px;background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary)}
+.dshb-memSearch{border:none;background:transparent;outline:none;color:var(--dsw-alias-label-primary);font:inherit;font-size:12.5px;height:30px;width:100%;min-width:0}
+.dshb-memItems{display:flex;flex-direction:column;gap:3px}
+.dshb-memItem{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 9px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--dsw-alias-label-primary);font:inherit;font-size:12.5px;cursor:pointer;text-align:left;min-width:0}
+.dshb-memItem:hover{background:var(--dsw-alias-bg-layer-2)}
+.dshb-memItem.active{border-color:var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);font-weight:600}
+.dshb-memItemName{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.dshb-memItemMeta{font-size:11px;color:var(--dsw-alias-label-secondary);flex:none}
+.dshb-memHits{display:flex;flex-direction:column;gap:4px;border-top:1px solid var(--dsw-alias-border-l1);padding-top:8px;margin-top:2px}
+.dshb-memHitsTitle{font-size:11.5px;color:var(--dsw-alias-label-secondary)}
+.dshb-memHit{display:flex;flex-direction:column;gap:2px;padding:6px 8px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;font-size:11.5px;text-align:left;cursor:pointer;min-width:0}
+.dshb-memHit strong{font-size:12px}
+.dshb-memHit span{color:var(--dsw-alias-label-secondary);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.dshb-memSchedule{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--dsw-alias-border-l1);padding-top:10px;margin-top:2px;font-size:12px}
+.dshb-memScheduleRow{display:flex;align-items:center;gap:6px;color:var(--dsw-alias-label-secondary)}
+.dshb-memHours{width:64px;height:30px;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;padding:0 8px;box-sizing:border-box}
+.dshb-memPane{display:flex;flex-direction:column;gap:8px;min-width:0;overflow-y:auto;max-height:58vh;padding-right:2px}
+.dshb-memPaneHead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.dshb-memPaneTitle{margin:0;font-size:14px;font-weight:600}
+.dshb-memTextarea{flex:1;min-height:260px;resize:vertical;line-height:1.6}
+.dshb-memCurator{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--dsw-alias-label-secondary)}
+.dshb-memCuratorLabel{flex:none}
+.dshb-memCurator .dshb-select{width:auto;min-width:140px;max-width:240px;height:32px;padding:4px 8px}
+.dshb-memPane .dshb-dialogActions{margin:12px -2px 0;padding:12px 0 0;background:transparent;border-top:1px solid var(--dsw-alias-border-l1)}
 .dshb-skeleton{display:grid;grid-template-columns:repeat(auto-fill, minmax(min(270px, 100%), 1fr));gap:14px}
 .dshb-skeletonCard{height:96px;border-radius:14px;border:1px solid var(--dsw-alias-border-l1);background:linear-gradient(90deg, var(--dsw-alias-bg-layer-1) 25%, var(--dsw-alias-bg-layer-2) 37%, var(--dsw-alias-bg-layer-1) 63%);background-size:400% 100%;animation:dshb-shimmer 1.4s ease infinite}
 @keyframes dshb-shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
@@ -846,37 +908,54 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
       );
     }
 
-    function MemoryDialog(props) {
-      const { t, bot, onCancel, onSave, onDistill } = props;
-      const [value, setValue] = React.useState(bot.memory || '');
-      const [busy, setBusy] = React.useState(false);
-      const [distilling, setDistilling] = React.useState(false);
+    function MemoryManager(props) {
+      const { t, bots, globalMemory, globalMemoryAt, memorySchedule, focus, onCancel, onSaveGlobal, onSaveBot, onSearch, onDistillAll, onDistillBot, onDistillGlobal, onSchedule } = props;
+      const [selected, setSelected] = React.useState(focus || 'global');
+      const [draft, setDraft] = React.useState('');
+      const [query, setQuery] = React.useState('');
+      const [hits, setHits] = React.useState(null);
+      const [busy, setBusy] = React.useState('');
       const [error, setError] = React.useState('');
+      const [curatorId, setCuratorId] = React.useState(memorySchedule.curatorId || (bots[0] ? bots[0].id : ''));
+      const bot = selected === 'global' ? null : bots.find((candidate) => candidate.id === selected) || null;
+      const baseMemory = selected === 'global' ? (globalMemory || '') : bot !== null ? (bot.memory || '') : '';
+      const baseAt = selected === 'global' ? globalMemoryAt : bot !== null ? bot.memoryAt : 0;
 
       React.useEffect(() => {
-        setValue(bot.memory || '');
-      }, [bot.memory]);
+        setDraft(baseMemory);
+      }, [selected, baseMemory]);
 
-      const save = async () => {
-        setBusy(true);
+      const run = async (key, action) => {
+        setBusy(key);
         setError('');
         try {
-          await onSave(bot.id, value);
-        } catch (failure) {
-          setError(String(failure && failure.message ? failure.message : failure));
-          setBusy(false);
-        }
-      };
-      const distill = async () => {
-        setDistilling(true);
-        setError('');
-        try {
-          await onDistill(bot.id);
+          await action();
         } catch (failure) {
           setError(String(failure && failure.message ? failure.message : failure));
         } finally {
-          setDistilling(false);
+          setBusy('');
         }
+      };
+
+      const save = () => run('save', async () => {
+        if (selected === 'global') await onSaveGlobal(draft);
+        else if (bot !== null) await onSaveBot(bot.id, draft);
+      });
+      const search = () => {
+        const needle = query.trim();
+        if (needle.length === 0) {
+          setHits(null);
+          return undefined;
+        }
+        return run('search', async () => setHits(await onSearch(needle)));
+      };
+      const distillAll = () => run('all', () => onDistillAll());
+      const distillGlobal = () => run('global', () => onDistillGlobal(curatorId));
+      const distillBot = () => (bot === null ? undefined : run('bot', () => onDistillBot(bot.id)));
+      const patchSchedule = (patch) => run('schedule', () => onSchedule({ enabled: memorySchedule.enabled === true, everyHours: memorySchedule.everyHours, ...patch }));
+      const pick = (id) => {
+        setSelected(id);
+        setError('');
       };
 
       return h(
@@ -889,28 +968,135 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
         },
         h(
           'div',
-          { className: 'dshb-dialog', style: { colorScheme: darkTheme() ? 'dark' : 'light' } },
-          h('h2', { className: 'dshb-dialogTitle' }, `${bot.emoji || '🤖'} ${bot.name} · ${t('memoryTitle')}`),
+          { className: 'dshb-dialog dshb-dialogWide', style: { colorScheme: darkTheme() ? 'dark' : 'light' } },
           h(
             'div',
-            { className: 'dshb-field' },
-            h('textarea', {
-              className: 'dshb-textarea',
-              style: { minHeight: '220px' },
-              value,
-              placeholder: t('memoryEmpty'),
-              onChange: (event) => setValue(event.target.value),
-            }),
-            h('div', { className: 'dshb-hint' }, t('memoryHint')),
-            bot.memoryAt ? h('div', { className: 'dshb-hint' }, `${t('memorySavedAt')} ${timeLabel(bot.memoryAt)}`) : null,
+            { className: 'dshb-dialogHead' },
+            h('h2', { className: 'dshb-dialogTitle' }, t('memoryManagerTitle')),
+            h('button', { type: 'button', className: 'dshb-iconBtn', title: t('actionClose'), 'aria-label': t('actionClose'), onClick: onCancel }, icon('close', 15)),
           ),
-          error.length > 0 ? h('div', { className: 'dshb-error' }, error) : null,
           h(
             'div',
-            { className: 'dshb-dialogActions' },
-            h('button', { type: 'button', className: 'dshb-btn quiet', onClick: onCancel, disabled: busy || distilling }, t('formCancel')),
-            h('button', { type: 'button', className: 'dshb-btn quiet', onClick: distill, disabled: busy || distilling }, distilling ? t('memoryDistilling') : t('memoryDistill')),
-            h('button', { type: 'button', className: 'dshb-btn', onClick: save, disabled: busy || distilling }, t('memorySave')),
+            { className: 'dshb-memBody' },
+            h(
+              'div',
+              { className: 'dshb-memRail' },
+              h(
+                'div',
+                { className: 'dshb-memSearchWrap' },
+                icon('search', 14),
+                h('input', {
+                  className: 'dshb-memSearch',
+                  type: 'search',
+                  value: query,
+                  placeholder: t('memorySearchPlaceholder'),
+                  onChange: (event) => setQuery(event.target.value),
+                  onKeyDown: (event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      search();
+                    }
+                  },
+                }),
+              ),
+              h(
+                'div',
+                { className: 'dshb-memItems' },
+                h(
+                  'button',
+                  { type: 'button', className: `dshb-memItem${selected === 'global' ? ' active' : ''}`, onClick: () => pick('global') },
+                  h('span', { className: 'dshb-memItemName' }, `🌐 ${t('memoryGlobal')}`),
+                  h('span', { className: 'dshb-memItemMeta' }, String((globalMemory || '').length)),
+                ),
+                bots.map((item) => h(
+                  'button',
+                  { key: item.id, type: 'button', className: `dshb-memItem${selected === item.id ? ' active' : ''}`, onClick: () => pick(item.id) },
+                  h('span', { className: 'dshb-memItemName' }, `${item.emoji || '🤖'} ${item.name}`),
+                  h('span', { className: 'dshb-memItemMeta' }, String((item.memory || '').length)),
+                )),
+              ),
+              hits === null
+                ? null
+                : h(
+                    'div',
+                    { className: 'dshb-memHits' },
+                    h('div', { className: 'dshb-memHitsTitle' }, hits.length === 0 ? t('memorySearchEmpty') : `「${query.trim()}」· ${hits.length}`),
+                    hits.map((hit) => h(
+                      'button',
+                      { key: `${hit.id}-${hit.snippet.slice(0, 12)}`, type: 'button', className: 'dshb-memHit', onClick: () => pick(hit.id) },
+                      h('strong', null, hit.name),
+                      h('span', null, hit.snippet),
+                    )),
+                  ),
+              h(
+                'div',
+                { className: 'dshb-memSchedule' },
+                h(
+                  'label',
+                  { className: 'dshb-check' },
+                  h('input', {
+                    type: 'checkbox',
+                    checked: memorySchedule.enabled === true,
+                    onChange: (event) => patchSchedule({ enabled: event.target.checked }),
+                  }),
+                  h('span', null, t('memoryAuto')),
+                ),
+                h(
+                  'div',
+                  { className: 'dshb-memScheduleRow' },
+                  h('input', {
+                    className: 'dshb-memHours',
+                    type: 'number',
+                    min: 1,
+                    max: 168,
+                    value: memorySchedule.everyHours,
+                    onChange: (event) => patchSchedule({ everyHours: Number(event.target.value) }),
+                  }),
+                  h('span', null, t('memoryHours')),
+                ),
+                h('div', { className: 'dshb-hint' }, t('memoryAutoHint')),
+                memorySchedule.lastRunAt ? h('div', { className: 'dshb-hint' }, `${t('routineLastRun')} ${timeLabel(memorySchedule.lastRunAt)}`) : null,
+              ),
+            ),
+            h(
+              'div',
+              { className: 'dshb-memPane' },
+              h(
+                'div',
+                { className: 'dshb-memPaneHead' },
+                h('h3', { className: 'dshb-memPaneTitle' }, selected === 'global' ? `🌐 ${t('memoryGlobal')}` : bot !== null ? `${bot.emoji || '🤖'} ${bot.name}` : t('memoryManagerTitle')),
+              ),
+              h('div', { className: 'dshb-hint' }, selected === 'global' ? t('memoryGlobalHint') : t('memorySelectHint')),
+              h('textarea', {
+                className: 'dshb-textarea dshb-memTextarea',
+                value: draft,
+                placeholder: selected === 'global' ? t('memoryGlobalEmpty') : t('memoryEmpty'),
+                onChange: (event) => setDraft(event.target.value),
+              }),
+              baseAt ? h('div', { className: 'dshb-hint' }, `${selected === 'global' ? t('memoryGlobalSavedAt') : t('memorySavedAt')} ${timeLabel(baseAt)}`) : null,
+              selected === 'global'
+                ? h(
+                    'div',
+                    { className: 'dshb-memCurator' },
+                    h('span', { className: 'dshb-memCuratorLabel' }, t('memoryCurator')),
+                    h(
+                      'select',
+                      { className: 'dshb-select', value: curatorId, onChange: (event) => setCuratorId(event.target.value) },
+                      bots.map((item) => h('option', { key: item.id, value: item.id }, `${item.emoji || '🤖'} ${item.name}`)),
+                    ),
+                    h('button', { type: 'button', className: 'dshb-btn quiet', onClick: distillGlobal, disabled: busy !== '' || curatorId.length === 0 }, busy === 'global' ? t('memoryDistilling') : t('memoryDistillGlobal')),
+                  )
+                : null,
+              error.length > 0 ? h('div', { className: 'dshb-error' }, error) : null,
+              h(
+                'div',
+                { className: 'dshb-dialogActions' },
+                h('button', { type: 'button', className: 'dshb-btn quiet', onClick: onCancel, disabled: busy !== '' }, t('formCancel')),
+                bots.length > 1 ? h('button', { type: 'button', className: 'dshb-btn quiet', onClick: distillAll, disabled: busy !== '' }, busy === 'all' ? t('memoryDistillingAll') : t('memoryDistillAll')) : null,
+                bot !== null ? h('button', { type: 'button', className: 'dshb-btn quiet', onClick: distillBot, disabled: busy !== '' }, busy === 'bot' ? t('memoryDistilling') : t('memoryDistill')) : null,
+                h('button', { type: 'button', className: 'dshb-btn', onClick: save, disabled: busy !== '' }, t('memorySave')),
+              ),
+            ),
           ),
         ),
       );
@@ -1936,13 +2122,19 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
       const [botDialog, setBotDialog] = React.useState(null);
       const [roomDialog, setRoomDialog] = React.useState(null);
       const [activeRoomId, setActiveRoomId] = React.useState(null);
-      const [memoryBotId, setMemoryBotId] = React.useState(null);
+      const [memoryManager, setMemoryManager] = React.useState(null);
+      const [globalMemory, setGlobalMemory] = React.useState('');
+      const [globalMemoryAt, setGlobalMemoryAt] = React.useState(0);
+      const [memorySchedule, setMemorySchedule] = React.useState({ enabled: false, everyHours: 24, lastRunAt: 0, curatorId: '' });
       const [routineBotId, setRoutineBotId] = React.useState(null);
 
       const absorb = (data) => {
         if (Array.isArray(data.bots)) setBots(data.bots);
         if (Array.isArray(data.rooms)) setRooms(data.rooms);
         if (Array.isArray(data.presets)) setPresets(data.presets);
+        if (typeof data.globalMemory === 'string') setGlobalMemory(data.globalMemory);
+        if (typeof data.globalMemoryAt === 'number') setGlobalMemoryAt(data.globalMemoryAt);
+        if (data.memorySchedule !== null && typeof data.memorySchedule === 'object') setMemorySchedule(data.memorySchedule);
       };
 
       const load = React.useCallback(async () => {
@@ -2015,9 +2207,12 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
         }
       };
 
+      const openMemoryManager = (focus) => {
+        setMemoryManager({ focus: typeof focus === 'string' && focus.length > 0 ? focus : 'global' });
+      };
+
       const saveMemory = async (botId, memory) => {
         absorb(await request({ action: 'botMemoryUpdate', botId, memory }));
-        setMemoryBotId(null);
       };
 
       const distillMemory = async (botId) => {
@@ -2025,6 +2220,36 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
         window.setTimeout(() => {
           load().catch(() => {});
         }, 9000);
+      };
+
+      const saveGlobalMemory = async (memory) => {
+        absorb(await request({ action: 'memoryGlobalUpdate', memory }));
+      };
+
+      const searchMemory = async (needle) => {
+        const data = await request({ action: 'memorySearch', query: needle });
+        absorb(data);
+        return Array.isArray(data.results) ? data.results : [];
+      };
+
+      const distillAllMemories = async () => {
+        const data = await request({ action: 'memoryDistillAll' });
+        absorb(data);
+        window.setTimeout(() => {
+          load().catch(() => {});
+        }, 12000);
+      };
+
+      const distillGlobalMemory = async (botId) => {
+        const data = await request({ action: 'memoryDistillGlobal', botId });
+        absorb(data);
+        window.setTimeout(() => {
+          load().catch(() => {});
+        }, 12000);
+      };
+
+      const updateMemorySchedule = async (patch) => {
+        absorb(await request({ action: 'memoryScheduleUpdate', ...patch }));
       };
 
       const addRoutine = async (botId, payload) => {
@@ -2134,7 +2359,7 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
         h(
           'span',
           { className: 'dshb-rowActions' },
-          h('button', { type: 'button', className: 'dshb-iconBtn', title: t('memory'), 'aria-label': t('memory'), onClick: (event) => { event.stopPropagation(); setMemoryBotId(bot.id); } }, icon('memory', 14)),
+          h('button', { type: 'button', className: 'dshb-iconBtn', title: t('memory'), 'aria-label': t('memory'), onClick: (event) => { event.stopPropagation(); openMemoryManager(bot.id); } }, icon('memory', 14)),
           h('button', { type: 'button', className: 'dshb-iconBtn', title: t('routines'), 'aria-label': t('routines'), onClick: (event) => { event.stopPropagation(); setRoutineBotId(bot.id); } }, icon('routine', 14)),
           h('button', { type: 'button', className: 'dshb-iconBtn', title: t('actionEdit'), 'aria-label': t('actionEdit'), onClick: (event) => { event.stopPropagation(); setBotDialog({ ...bot }); } }, icon('edit', 14)),
           h('button', { type: 'button', className: 'dshb-iconBtn', title: t('actionDelete'), 'aria-label': t('actionDelete'), onClick: (event) => { event.stopPropagation(); removeBot(bot); } }, icon('trash', 14)),
@@ -2260,6 +2485,7 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
               ),
               h('button', { className: 'dshb-btn', type: 'button', onClick: () => setBotDialog({}) }, icon('plus', 15), t('new')),
               h('button', { className: 'dshb-btn quiet', type: 'button', onClick: () => setRoomDialog({}) }, icon('room', 15), t('newRoom')),
+              h('button', { className: 'dshb-btn quiet', type: 'button', onClick: () => openMemoryManager('global') }, icon('memory', 15), t('memoryManager')),
               h(
                 'button',
                 {
@@ -2374,19 +2600,24 @@ position:relative;flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;p
               onCancel: () => setRoomDialog(null),
               onSubmit: submitRoom,
             }),
-        memoryBotId === null
+        memoryManager === null
           ? null
-          : (() => {
-              const bot = bots.find((candidate) => candidate.id === memoryBotId);
-              if (bot === undefined) return null;
-              return h(MemoryDialog, {
-                t,
-                bot,
-                onCancel: () => setMemoryBotId(null),
-                onSave: saveMemory,
-                onDistill: distillMemory,
-              });
-            })(),
+          : h(MemoryManager, {
+              t,
+              bots,
+              globalMemory,
+              globalMemoryAt,
+              memorySchedule,
+              focus: memoryManager.focus,
+              onCancel: () => setMemoryManager(null),
+              onSaveGlobal: saveGlobalMemory,
+              onSaveBot: saveMemory,
+              onSearch: searchMemory,
+              onDistillAll: distillAllMemories,
+              onDistillBot: distillMemory,
+              onDistillGlobal: distillGlobalMemory,
+              onSchedule: updateMemorySchedule,
+            }),
         routineBotId === null
           ? null
           : (() => {
