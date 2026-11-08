@@ -111,6 +111,11 @@ files stay on disk. Deleting a room removes its transcript only.
 
 ## Changelog
 
+- **0.9.1** — deleting a bot now also removes its workspace from the Harness sidebar (bots created
+  with workspace registration on used to leave `__SmokeBot__`-style entries behind); the bot's
+  workspace directory is removed too when it is empty. `workspacePrune` still cleans up any
+  leftovers from earlier versions.
+
 - **0.9.0** — memory management.
   - Global memory: `memory/_global.md` is shared by every bot and injected into room, leader,
     routine and persona prompts next to each bot's own memory.

@@ -17,7 +17,7 @@
  *   <root>/workspaces/<slug>          one working directory per bot
  *   <root>/memory/<botId>.md          one long-term memory file per bot
  */
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rmdir, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
@@ -540,7 +540,32 @@ export function apply(ctx) {
         ctx.logger?.warn?.(`dsh-bots: could not archive session ${removed.sessionId}: ${String(error)}`);
       }
     }
+    await deleteBotWorkspace(removed, state);
     return removed;
+  }
+
+  async function deleteBotWorkspace(bot, state) {
+    if (bot.registerWorkspace === false) return;
+    const botCwd = typeof bot.cwd === 'string' ? path.resolve(bot.cwd) : '';
+    if (botCwd.length === 0) return;
+    const shared = state.bots.some((other) => typeof other.cwd === 'string' && path.resolve(other.cwd) === botCwd);
+    if (shared) return;
+    let workspaceId = typeof bot.workspaceId === 'string' ? bot.workspaceId : '';
+    try {
+      if (workspaceId.length === 0) {
+        const found = await ctx.workspaceRegistry.resolveByPath(botCwd);
+        workspaceId = found?.id ?? '';
+      }
+      if (workspaceId.length > 0) await ctx.workspaceRegistry.delete(workspaceId);
+    } catch (error) {
+      ctx.logger?.warn?.(`dsh-bots: could not delete workspace for ${bot.id}: ${String(error)}`);
+    }
+    try {
+      const entries = await readdir(botCwd);
+      if (entries.length === 0) await rmdir(botCwd);
+    } catch {
+      /* keep the directory when it still holds files */
+    }
   }
 
   /* ------------------------------------------------------------------ memory */
